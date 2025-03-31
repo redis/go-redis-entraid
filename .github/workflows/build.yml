@@ -1,0 +1,26 @@
+name: Go Test & Coverage
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: stable
+    - name: Install dependencies
+      run: go mod tidy
+    - name: Run tests with coverage
+      run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+    - name: Check coverage
+      uses: vladopajic/go-test-coverage@v2
+      with:
+        config: ./.testcoverage.yml
