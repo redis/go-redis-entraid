@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+goimports -l -w . # includes go fmt
+golangci-lint run # includes golint, go vet
