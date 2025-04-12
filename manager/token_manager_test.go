@@ -857,7 +857,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
+		// wait for request token to be called
 		<-done
+		// wait a bit for listener to be notified
+		<-time.After(10 * time.Millisecond)
 		assert.NoError(t, cancel())
 
 		assert.InDelta(t, stop.Sub(start), time.Duration(tm.retryOptions.InitialDelayMs)*time.Millisecond, float64(200*time.Millisecond))

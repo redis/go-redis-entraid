@@ -3,5 +3,8 @@
 *.tar.gz
 *.dic
 coverage.txt
+cover.out
 **/coverage.txt
+**/cover.out
 .vscode
+tmp/
