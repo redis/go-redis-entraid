@@ -11,15 +11,15 @@ profile: cover.out
 threshold:
   # (optional; default 0)
   # Minimum coverage percentage required for individual files.
-  file: 70
+  file: 85
 
   # (optional; default 0)
   # Minimum coverage percentage required for each package.
-  package: 70
+  package: 90
 
   # (optional; default 0)
   # Minimum overall project coverage percentage required.
-  total: 80
+  total: 85
 
 # Holds regexp rules which will override thresholds for matched files or packages
 # using their paths.
@@ -28,9 +28,9 @@ threshold:
 # new threshold to it. If project has multiple rules that match same path,
 # override rules should be listed in order from specific to more general rules.
 override:
-  # Increase coverage threshold to 100% for `foo` package
-  # (default is 80, as configured above in this example).
-  - path: ^pkg/lib/foo$
+  - path: ^internal$
+    threshold: 95
+  - path: ^token$
     threshold: 100
 
 # Holds regexp rules which will exclude matched files or packages

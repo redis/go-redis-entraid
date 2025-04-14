@@ -119,7 +119,13 @@ func NewConfidentialCredentialsProvider(options ConfidentialCredentialsProviderO
 // DefaultAzureCredentialsProviderOptions is a struct that holds the options for the default azure credentials provider.
 // It is used to configure the credentials provider when requesting a token.
 type DefaultAzureCredentialsProviderOptions struct {
+	// CredentialsProviderOptions is the options for the credentials provider.
+	// This is used to configure the credentials provider when requesting a token.
+	// It includes the clientId and TokenManagerOptions.
 	CredentialsProviderOptions
+	// DefaultAzureIdentityProviderOptions is the options for the default azure identity provider.
+	// This is used to configure the identity provider when requesting a token.
+	// It is used to specify the client ID, tenant ID, and scopes for the identity.
 	identity.DefaultAzureIdentityProviderOptions
 }
 

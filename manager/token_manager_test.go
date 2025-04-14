@@ -388,7 +388,7 @@ func TestTokenManager_Start(t *testing.T) {
 						_, err = tokenManager.Start(l)
 					}
 					if err != nil {
-						if err != ErrTokenManagerAlreadyCanceled && err != ErrTokenManagerAlreadyStarted {
+						if err != ErrTokenManagerAlreadyClosed && err != ErrTokenManagerAlreadyStarted {
 							// this is un unexpected error, fail the test
 							assert.Error(t, err)
 						}

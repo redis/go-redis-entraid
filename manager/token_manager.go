@@ -76,13 +76,13 @@ type TokenManager interface {
 	// It takes a boolean value forceRefresh as an argument.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a channel that will receive updates.
-	Start(listener TokenListener) (CancelFunc, error)
+	Start(listener TokenListener) (CloseFunc, error)
 	// Close closes the token manager and releases any resources.
 	Close() error
 }
 
-// CancelFunc is a function that cancels the token manager.
-type CancelFunc func() error
+// CloseFunc is a function that closes the token manager.
+type CloseFunc func() error
 
 // TokenListener is an interface that contains the methods for receiving updates from the token manager.
 // The token manager will call the listener's OnTokenNext method with the updated token.
@@ -221,7 +221,7 @@ func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) 
 //
 // Note: The initial token is delivered synchronously.
 // The TokenListener will receive the token immediately, before the token manager goroutine starts.
-func (e *entraidTokenManager) Start(listener TokenListener) (CancelFunc, error) {
+func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.listener != nil {
@@ -316,7 +316,7 @@ func (e *entraidTokenManager) Close() error {
 	defer e.lock.Unlock()
 
 	if e.closedChan == nil || e.listener == nil {
-		return ErrTokenManagerAlreadyCanceled
+		return ErrTokenManagerAlreadyClosed
 	}
 	e.listener = nil
 	close(e.closedChan)

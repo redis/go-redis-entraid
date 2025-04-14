@@ -47,13 +47,6 @@ func TestTokenExpiration(t *testing.T) {
 	assert.False(t, token.ExpirationOn().After(time.Now()))
 }
 
-func TestTokenReceivedAt(t *testing.T) {
-	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now().Add(1*time.Hour), 3600)
-	assert.True(t, token.receivedAt.After(time.Now().Add(-1*time.Hour)))
-	assert.True(t, token.receivedAt.Before(time.Now().Add(1*time.Hour)))
-}
-
 func TestTokenTTL(t *testing.T) {
 	t.Parallel()
 	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
@@ -110,6 +103,27 @@ func TestTokenCompare(t *testing.T) {
 	assert.False(t, token1.compareRawCredentials(token4))
 	assert.False(t, token1.compareToken(token4))
 	assert.True(t, token1.compareCredentials(token4))
+}
+
+func TestTokenReceivedAt(t *testing.T) {
+	t.Parallel()
+	// Create a token with a specific receivedAt time
+	receivedAt := time.Now()
+	token := New("username", "password", "rawToken", time.Now(), receivedAt, 3600)
+
+	assert.True(t, token.receivedAt.After(time.Now().Add(-1*time.Hour)))
+	assert.True(t, token.receivedAt.Before(time.Now().Add(1*time.Hour)))
+
+	// Check if the receivedAt time is set correctly
+	assert.Equal(t, receivedAt, token.ReceivedAt())
+
+	tcopiedToken := token.Copy()
+	// Check if the copied token has the same receivedAt time
+	assert.Equal(t, receivedAt, tcopiedToken.ReceivedAt())
+	// Check if the copied token is not the same instance as the original token
+	assert.NotSame(t, token, tcopiedToken)
+	// Check if the copied token is a new instance
+	assert.NotNil(t, tcopiedToken)
 }
 
 func BenchmarkNew(b *testing.B) {
