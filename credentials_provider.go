@@ -83,12 +83,12 @@ func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener
 
 	token, err := e.tokenManager.GetToken(false)
 	if err != nil {
-		go listener.OnError(err)
+		//go listener.OnError(err)
 		return nil, nil, err
 	}
 
 	// Notify the listener with the credentials.
-	go listener.OnNext(token)
+	//go listener.OnNext(token)
 
 	cancel := func() error {
 		// Remove the listener from the list of listeners.

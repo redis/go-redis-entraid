@@ -46,7 +46,17 @@ func (t *Token) BasicAuth() (string, string) {
 
 // RawCredentials returns the raw credentials for authentication.
 func (t *Token) RawCredentials() string {
+	return t.RawToken()
+}
+
+// RawToken returns the raw token.
+func (t *Token) RawToken() string {
 	return t.rawToken
+}
+
+// ReceivedAt returns the time when the token was received.
+func (t *Token) ReceivedAt() time.Time {
+	return t.receivedAt
 }
 
 // ExpirationOn returns the expiration time of the token.

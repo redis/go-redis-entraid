@@ -19,20 +19,51 @@ import (
 type mockTokenManager struct {
 	token *token.Token
 	err   error
+	lock  sync.Mutex
 }
 
+const rawTokenString = "mock-token"
+const tokenExpiration = 100 * time.Millisecond
+
 func (m *mockTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
+	if forceRefresh {
+		m.token = token.New(
+			"test",
+			"test",
+			rawTokenString,
+			time.Now().Add(tokenExpiration),
+			time.Now(),
+			int64(100*time.Millisecond),
+		)
+	}
 	return m.token, m.err
 }
 
 func (m *mockTokenManager) Start(listener manager.TokenListener) (manager.CancelFunc, error) {
-	if m.err != nil {
-		listener.OnTokenError(m.err)
-		return nil, m.err
-	}
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-time.After(tokenExpiration):
+				m.lock.Lock()
+				if m.err != nil {
+					listener.OnTokenError(m.err)
+					return
+				}
+				listener.OnTokenNext(m.token)
+				m.lock.Unlock()
+			case <-done:
+				// Exit the loop if done channel is closed
+				return
 
-	listener.OnTokenNext(m.token)
-	return func() error { return nil }, nil
+			}
+		}
+	}()
+
+	return func() error {
+		close(done)
+		return nil
+	}, nil
 }
 
 func (m *mockTokenManager) Close() error {
@@ -43,6 +74,17 @@ func (m *mockTokenManager) Close() error {
 type mockCredentialsListener struct {
 	LastTokenCh chan string
 	LastErrCh   chan error
+}
+
+func (m *mockCredentialsListener) readWithTimeout(timeout time.Duration) (string, error) {
+	select {
+	case tk := <-m.LastTokenCh:
+		return tk, nil
+	case err := <-m.LastErrCh:
+		return "", err
+	case <-time.After(timeout):
+		return "", errors.New("timeout waiting for token")
+	}
 }
 
 func (m *mockCredentialsListener) OnNext(credentials auth.Credentials) {
@@ -60,10 +102,10 @@ func (m *mockCredentialsListener) OnError(err error) {
 }
 
 // testTokenManagerFactory is a factory function that returns a mock token manager
-func testTokenManagerFactory(token *token.Token, err error) func(shared.IdentityProvider, manager.TokenManagerOptions) (manager.TokenManager, error) {
+func testTokenManagerFactory(tk *token.Token, err error) func(shared.IdentityProvider, manager.TokenManagerOptions) (manager.TokenManager, error) {
 	return func(provider shared.IdentityProvider, options manager.TokenManagerOptions) (manager.TokenManager, error) {
 		return &mockTokenManager{
-			token: token,
+			token: tk,
 			err:   err,
 		}, nil
 	}
@@ -124,7 +166,7 @@ func TestNewManagedIdentityCredentialsProvider(t *testing.T) {
 			testToken := token.New(
 				"test",
 				"test",
-				"mock-token",
+				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
 				int64(time.Hour),
@@ -143,9 +185,15 @@ func TestNewManagedIdentityCredentialsProvider(t *testing.T) {
 
 				// Test the provider with a mock listener
 				listener := &mockCredentialsListener{LastTokenCh: make(chan string)}
-				_, _, err := provider.Subscribe(listener)
+				tk, cancel, err := provider.Subscribe(listener)
+				defer func() {
+					err := cancel()
+					if err != nil {
+						panic(err)
+					}
+				}()
+				assert.Equal(t, rawTokenString, tk.RawCredentials())
 				assert.NoError(t, err)
-				assert.Equal(t, "mock-token", <-listener.LastTokenCh)
 			}
 		})
 	}
@@ -203,7 +251,7 @@ func TestNewConfidentialCredentialsProvider(t *testing.T) {
 			testToken := token.New(
 				"test",
 				"test",
-				"mock-token",
+				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
 				int64(time.Hour),
@@ -222,9 +270,15 @@ func TestNewConfidentialCredentialsProvider(t *testing.T) {
 
 				// Test the provider with a mock listener
 				listener := &mockCredentialsListener{LastTokenCh: make(chan string)}
-				_, _, err := provider.Subscribe(listener)
+				credentials, cancel, err := provider.Subscribe(listener)
+				defer func() {
+					err := cancel()
+					if err != nil {
+						panic(err)
+					}
+				}()
+				assert.Equal(t, rawTokenString, credentials.RawCredentials())
 				assert.NoError(t, err)
-				assert.Equal(t, "mock-token", <-listener.LastTokenCh)
 			}
 		})
 	}
@@ -270,7 +324,7 @@ func TestNewDefaultAzureCredentialsProvider(t *testing.T) {
 			testToken := token.New(
 				"test",
 				"test",
-				"mock-token",
+				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
 				int64(time.Hour),
@@ -289,9 +343,15 @@ func TestNewDefaultAzureCredentialsProvider(t *testing.T) {
 
 				// Test the provider with a mock listener
 				listener := &mockCredentialsListener{LastTokenCh: make(chan string)}
-				_, _, err := provider.Subscribe(listener)
+				tk, cancel, err := provider.Subscribe(listener)
+				defer func() {
+					err := cancel()
+					if err != nil {
+						panic(err)
+					}
+				}()
+				assert.Equal(t, rawTokenString, tk.RawCredentials())
 				assert.NoError(t, err)
-				assert.Equal(t, "mock-token", <-listener.LastTokenCh)
 			}
 		})
 	}
@@ -319,7 +379,7 @@ func TestCredentialsProviderErrorHandling(t *testing.T) {
 		testToken := token.New(
 			"test",
 			"test",
-			"mock-token",
+			rawTokenString,
 			time.Now().Add(time.Hour),
 			time.Now(),
 			int64(time.Hour),
@@ -358,7 +418,7 @@ func TestCredentialsProviderErrorHandling(t *testing.T) {
 		testToken := token.New(
 			"test",
 			"test",
-			"mock-token",
+			rawTokenString,
 			time.Now().Add(time.Hour),
 			time.Now(),
 			int64(time.Hour),
@@ -404,7 +464,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 				testToken := token.New(
 					"test",
 					"test",
-					"mock-token",
+					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
 					int64(time.Hour),
@@ -440,7 +500,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 				testToken := token.New(
 					"test",
 					"test",
-					"mock-token",
+					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
 					int64(time.Hour),
@@ -472,7 +532,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 				testToken := token.New(
 					"test",
 					"test",
-					"mock-token",
+					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
 					int64(time.Hour),
@@ -505,10 +565,10 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 	testToken := token.New(
 		"test",
 		"test",
-		"mock-token",
-		time.Now().Add(time.Hour),
+		rawTokenString,
+		time.Now().Add(tokenExpiration),
 		time.Now(),
-		int64(time.Hour),
+		int64(tokenExpiration),
 	)
 
 	// Create a test provider
@@ -561,10 +621,12 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 		// Verify all listeners received the token
 		for i, listener := range listeners {
 			select {
-			case token := <-listener.LastTokenCh:
-				assert.Equal(t, "mock-token", token, "listener %d received wrong token", i)
+			case tk := <-listener.LastTokenCh:
+				assert.Equal(t, rawTokenString, tk, "listener %d received wrong token", i)
 			case err := <-listener.LastErrCh:
 				t.Fatalf("listener %d received error: %v", i, err)
+			case <-time.After(3 * tokenExpiration):
+				t.Fatalf("listener %d timed out waiting for token", i)
 			}
 		}
 
@@ -582,8 +644,8 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 		// Verify no more tokens are sent after cancellation
 		for i, listener := range listeners {
 			select {
-			case token := <-listener.LastTokenCh:
-				t.Fatalf("listener %d received unexpected token after cancellation: %s", i, token)
+			case tk := <-listener.LastTokenCh:
+				t.Fatalf("listener %d received unexpected token after cancellation: %s", i, tk)
 			case err := <-listener.LastErrCh:
 				t.Fatalf("listener %d received unexpected error after cancellation: %v", i, err)
 			default:
@@ -699,5 +761,201 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 		provider, err := NewDefaultAzureCredentialsProvider(options)
 		assert.Error(t, err)
 		assert.Nil(t, provider)
+	})
+}
+
+func TestCredentialsProviderWithMockIdentityProvider(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Subscribe and Unsubscribe", func(t *testing.T) {
+		t.Parallel()
+
+		// Create mock token manager
+		tm := &mockTokenManager{
+			token: token.New(
+				"test",
+				"test",
+				"test-token",
+				time.Now().Add(time.Hour),
+				time.Now(),
+				int64(time.Hour),
+			),
+		}
+
+		// Create credentials provider
+		cp, err := NewCredentialsProvider(tm, CredentialsProviderOptions{})
+		assert.NoError(t, err)
+		assert.NotNil(t, cp)
+
+		// Create mock listener
+		listener := &mockCredentialsListener{
+			LastTokenCh: make(chan string),
+			LastErrCh:   make(chan error),
+		}
+
+		// Subscribe listener
+		credentials, cancel, err := cp.Subscribe(listener)
+		assert.NoError(t, err)
+		assert.NotNil(t, credentials)
+		assert.NotNil(t, cancel)
+
+		// Wait for initial token
+		tk, err := listener.readWithTimeout(time.Second)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-token", tk)
+
+		// Unsubscribe
+		err = cancel()
+		assert.NoError(t, err)
+	})
+
+	t.Run("Multiple Listeners", func(t *testing.T) {
+		t.Parallel()
+
+		// Create mock token manager
+		tm := &mockTokenManager{
+			token: token.New(
+				"test",
+				"test",
+				"test-token",
+				time.Now().Add(time.Hour),
+				time.Now(),
+				int64(time.Hour),
+			),
+		}
+
+		// Create credentials provider
+		cp, err := NewCredentialsProvider(tm, CredentialsProviderOptions{})
+		assert.NoError(t, err)
+		assert.NotNil(t, cp)
+
+		// Create multiple mock listeners
+		listener1 := &mockCredentialsListener{
+			LastTokenCh: make(chan string),
+			LastErrCh:   make(chan error),
+		}
+		listener2 := &mockCredentialsListener{
+			LastTokenCh: make(chan string),
+			LastErrCh:   make(chan error),
+		}
+
+		// Subscribe first listener
+		credentials1, cancel1, err := cp.Subscribe(listener1)
+		assert.NoError(t, err)
+		assert.NotNil(t, credentials1)
+		assert.NotNil(t, cancel1)
+
+		// Subscribe second listener
+		credentials2, cancel2, err := cp.Subscribe(listener2)
+		assert.NoError(t, err)
+		assert.NotNil(t, credentials2)
+		assert.NotNil(t, cancel2)
+
+		// Wait for initial tokens
+		token1, err := listener1.readWithTimeout(time.Second)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-token", token1)
+
+		token2, err := listener2.readWithTimeout(time.Second)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-token", token2)
+
+		// Unsubscribe first listener
+		err = cancel1()
+		assert.NoError(t, err)
+
+		// Unsubscribe second listener
+		err = cancel2()
+		assert.NoError(t, err)
+	})
+
+	t.Run("Token Updates", func(t *testing.T) {
+		t.Parallel()
+
+		// Create mock token manager
+		tm := &mockTokenManager{
+			token: token.New(
+				"test",
+				"test",
+				"initial-token",
+				time.Now().Add(time.Hour),
+				time.Now(),
+				int64(time.Hour),
+			),
+		}
+
+		// Create credentials provider
+		cp, err := NewCredentialsProvider(tm, CredentialsProviderOptions{})
+		assert.NoError(t, err)
+		assert.NotNil(t, cp)
+
+		// Create mock listener
+		listener := &mockCredentialsListener{
+			LastTokenCh: make(chan string),
+			LastErrCh:   make(chan error),
+		}
+
+		// Subscribe listener
+		credentials, cancel, err := cp.Subscribe(listener)
+		assert.NoError(t, err)
+		assert.NotNil(t, credentials)
+		assert.NotNil(t, cancel)
+
+		// Wait for initial token
+		tk, err := listener.readWithTimeout(time.Second)
+		assert.NoError(t, err)
+		assert.Equal(t, "initial-token", tk)
+
+		tm.lock.Lock()
+		// Update token
+		tm.token = token.New(
+			"test",
+			"test",
+			"updated-token",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			int64(time.Hour),
+		)
+		tm.lock.Unlock()
+
+		// Wait for token update
+		tk, err = listener.readWithTimeout(time.Second)
+		assert.NoError(t, err)
+		assert.Equal(t, "updated-token", tk)
+
+		// Unsubscribe
+		err = cancel()
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error Handling", func(t *testing.T) {
+		t.Parallel()
+
+		// Create mock token manager with error
+		tm := &mockTokenManager{
+			err: assert.AnError,
+		}
+
+		// Create credentials provider
+		cp, err := NewCredentialsProvider(tm, CredentialsProviderOptions{})
+		assert.NoError(t, err)
+		assert.NotNil(t, cp)
+
+		// Create mock listener
+		listener := &mockCredentialsListener{
+			LastTokenCh: make(chan string),
+			LastErrCh:   make(chan error),
+		}
+
+		// Subscribe listener
+		credentials, cancel, err := cp.Subscribe(listener)
+		assert.Error(t, err)
+		assert.Nil(t, credentials)
+		assert.Nil(t, cancel)
+
+		// Wait for error
+		_, err = listener.readWithTimeout(time.Second)
+		assert.Error(t, err)
+		assert.Equal(t, assert.AnError, err)
 	})
 }
