@@ -634,10 +634,37 @@ func TestRedisConnection(t *testing.T) {
 A: The library handles token expiration automatically. Tokens are refreshed when they reach 70% of their lifetime (configurable via `ExpirationRefreshRatio`). You can customize this behavior using `TokenManagerOptions`.
 
 ### Q: What's the difference between managed identity types?
-A: 
-- System Assigned: Automatically created and managed by Azure
-- User Assigned: Created and managed by you, can be shared across resources
-- Default Azure: Uses environment-based authentication, good for development
+A: There are three main types of managed identities in Azure:
+
+1. **System Assigned Managed Identity**:
+   - Automatically created and managed by Azure
+   - Tied directly to a specific Azure resource (VM, App Service, etc.)
+   - Cannot be shared between resources
+   - Automatically deleted when the resource is deleted
+   - Best for single-resource applications with dedicated identity
+
+2. **User Assigned Managed Identity**:
+   - Created and managed independently of resources
+   - Can be assigned to multiple Azure resources
+   - Has its own lifecycle independent of resources
+   - Can be shared across multiple resources
+   - Best for applications that need a shared identity or run across multiple resources
+
+3. **Default Azure Identity**:
+   - Uses environment-based authentication
+   - Automatically tries multiple authentication methods in sequence:
+     1. Environment variables
+     2. Managed Identity
+     3. Visual Studio Code
+     4. Azure CLI
+     5. Visual Studio
+   - Best for development and testing environments
+   - Provides flexibility during development without changing code
+
+The choice between these types depends on your specific use case:
+- Use System Assigned for single-resource applications
+- Use User Assigned for shared identity scenarios
+- Use Default Azure Identity for development and testing
 
 ### Q: How do I handle connection failures?
 A: The library includes built-in retry mechanisms in the TokenManager. You can configure retry behavior using `RetryOptions`:
