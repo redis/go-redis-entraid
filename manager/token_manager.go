@@ -337,6 +337,7 @@ func (e *entraidTokenManager) Stop() error {
 		return ErrTokenManagerAlreadyStopped
 	}
 
+	e.ctxCancel()
 	e.listener = nil
 	close(e.closedChan)
 
