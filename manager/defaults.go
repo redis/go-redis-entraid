@@ -74,7 +74,7 @@ func defaultRetryOptionsOr(retryOptions RetryOptions) RetryOptions {
 // The default token parser is used to parse the raw token and return a Token object.
 func defaultIdentityProviderResponseParserOr(idpResponseParser shared.IdentityProviderResponseParser) shared.IdentityProviderResponseParser {
 	if idpResponseParser == nil {
-		return &defaultIdentityProviderResponseParser{}
+		return entraidIdentityProviderResponseParser
 	}
 	return idpResponseParser
 }

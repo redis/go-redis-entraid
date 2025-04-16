@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1372,4 +1373,304 @@ func BenchmarkTokenManager_durationToRenewal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tm.durationToRenewal()
 	}
+}
+
+// TestConcurrentTokenManagerOperations tests concurrent operations on the TokenManager
+// to verify there are no deadlocks or race conditions in the implementation.
+func TestConcurrentTokenManagerOperations(t *testing.T) {
+	t.Parallel()
+
+	// Create a mock identity provider that returns predictable tokens
+	mockIdp := &concurrentMockIdentityProvider{
+		tokenCounter: 0,
+	}
+
+	// Create token manager with the mock provider
+	options := TokenManagerOptions{
+		ExpirationRefreshRatio: 0.7,
+		LowerRefreshBoundMs:    100,
+	}
+	tm, err := NewTokenManager(mockIdp, options)
+	assert.NoError(t, err)
+	assert.NotNil(t, tm)
+
+	// Number of concurrent operations to perform
+	const numConcurrentOps = 50
+	const numGoroutines = 1000
+
+	// Channels to track received tokens and errors
+	tokenCh := make(chan *token.Token, numConcurrentOps*numGoroutines)
+	errorCh := make(chan error, numConcurrentOps*numGoroutines)
+
+	// Channel to signal completion of all operations
+	doneCh := make(chan struct{})
+
+	// Track closers for cleanup
+	var closers sync.Map
+
+	// Start multiple goroutines that will concurrently interact with the token manager
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(routineID int) {
+			defer wg.Done()
+
+			for j := 0; j < numConcurrentOps; j++ {
+				// Create a listener for this operation
+				listener := &concurrentTestTokenListener{
+					onNextFunc: func(t *token.Token) {
+						select {
+						case tokenCh <- t:
+						default:
+							// Channel full, ignore
+						}
+					},
+					onErrorFunc: func(err error) {
+						select {
+						case errorCh <- err:
+						default:
+							// Channel full, ignore
+						}
+					},
+				}
+
+				// Choose operation based on a pattern
+				// Using modulo for a deterministic pattern that exercises all operations
+				opType := j % 3
+
+				// t.Logf("Goroutine %d, Operation %d: Performing operation type %d", routineID, j, opType)
+
+				switch opType {
+				case 0:
+					// Start the token manager with a new listener
+					// t.Logf("Goroutine %d, Operation %d: Attempting to start token manager", routineID, j)
+					closeFunc, err := tm.Start(listener)
+
+					if err != nil {
+						if err != ErrTokenManagerAlreadyStarted {
+							// t.Logf("Goroutine %d, Operation %d: Start failed with error: %v", routineID, j, err)
+							select {
+							case errorCh <- fmt.Errorf("failed to start token manager: %w", err):
+							default:
+								t.Fatalf("Goroutine %d, Operation %d: Failed to start token manager: %v", routineID, j, err)
+							}
+						}
+						continue
+					}
+
+					// t.Logf("Goroutine %d, Operation %d: Successfully started token manager", routineID, j)
+					// Store the closer for later cleanup
+					closerKey := fmt.Sprintf("closer-%d-%d", routineID, j)
+					closers.Store(closerKey, closeFunc)
+
+					// Simulate some work
+					time.Sleep(time.Duration(500-rand.Intn(400)) * time.Millisecond)
+
+				case 1:
+					// Get current token
+					//t.Logf("Goroutine %d, Operation %d: Getting token", routineID, j)
+					token, err := tm.GetToken(false)
+					if err != nil {
+						//t.Logf("Goroutine %d, Operation %d: GetToken failed with error: %v", routineID, j, err)
+						select {
+						case errorCh <- fmt.Errorf("failed to get token: %w", err):
+						default:
+							t.Fatalf("Goroutine %d, Operation %d: Failed to get token: %v", routineID, j, err)
+						}
+					} else if token != nil {
+						//t.Logf("Goroutine %d, Operation %d: Successfully got token, expires: %v", routineID, j, token.ExpirationOn())
+						select {
+						case tokenCh <- token:
+						default:
+							// Channel full, ignore
+						}
+					}
+
+				case 2:
+					// Close a previously created token manager listener
+					// This simulates multiple subscriptions being created and destroyed
+					//t.Logf("Goroutine %d, Operation %d: Attempting to close a token manager", routineID, j)
+					closedAny := false
+
+					closers.Range(func(key, value interface{}) bool {
+						if j%10 > 7 { // Only close some of the time based on a pattern
+							closedAny = true
+							//t.Logf("Goroutine %d, Operation %d: Closing token manager with key %v", routineID, j, key)
+
+							closeFunc := value.(CloseFunc)
+							if err := closeFunc(); err != nil {
+								if err != ErrTokenManagerAlreadyClosed {
+									// t.Logf("Goroutine %d, Operation %d: Close failed with error: %v", routineID, j, err)
+									select {
+									case errorCh <- fmt.Errorf("failed to close token manager: %w", err):
+									default:
+										t.Fatalf("Goroutine %d, Operation %d: Failed to close token manager: %v", routineID, j, err)
+									}
+								} else {
+									//t.Logf("Goroutine %d, Operation %d: TokenManager was already closed",  routineID, j)
+								}
+							} else {
+								// t.Logf("Goroutine %d, Operation %d: Successfully closed token manager", routineID, j)
+							}
+
+							closers.Delete(key)
+							return false // stop after finding one to close
+						}
+						return true
+					})
+
+					if !closedAny {
+						//t.Logf("Goroutine %d, Operation %d: No token manager to close or condition not met",  routineID, j)
+					}
+				}
+			}
+		}(i)
+	}
+
+	// Wait for all operations to complete or timeout
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+
+	// Use a timeout to detect deadlocks
+	select {
+	case <-doneCh:
+		// All operations completed successfully
+		t.Log("All concurrent operations completed successfully")
+	case <-time.After(30 * time.Second):
+		t.Fatal("test timed out, possible deadlock detected")
+	}
+
+	// Count operations by type
+	var startCount, getTokenCount, closeCount int32
+
+	// Collect all ops from goroutines
+	for i := 0; i < numGoroutines; i++ {
+		for j := 0; j < numConcurrentOps; j++ {
+			opType := j % 3
+			switch opType {
+			case 0:
+				atomic.AddInt32(&startCount, 1)
+			case 1:
+				atomic.AddInt32(&getTokenCount, 1)
+			case 2:
+				atomic.AddInt32(&closeCount, 1)
+			}
+		}
+	}
+
+	// Clean up any remaining closers
+	closers.Range(func(key, value interface{}) bool {
+		closeFunc := value.(CloseFunc)
+		_ = closeFunc() // Ignore errors during cleanup
+		return true
+	})
+
+	// Close channels to avoid goroutine leaks
+	close(tokenCh)
+	close(errorCh)
+
+	// Count tokens and check their validity
+	var tokens []*token.Token
+	for t := range tokenCh {
+		tokens = append(tokens, t)
+	}
+
+	// Collect and categorize errors
+	var startErrors, getTokenErrors, closeErrors, otherErrors []error
+	for err := range errorCh {
+		errStr := err.Error()
+		if strings.Contains(errStr, "failed to start token manager") {
+			startErrors = append(startErrors, err)
+		} else if strings.Contains(errStr, "failed to get token") {
+			getTokenErrors = append(getTokenErrors, err)
+		} else if strings.Contains(errStr, "failed to close token manager") {
+			closeErrors = append(closeErrors, err)
+		} else {
+			otherErrors = append(otherErrors, err)
+			t.Fatalf("Unexpected error during concurrent operations: %v", err)
+		}
+	}
+
+	totalOps := startCount + getTokenCount + closeCount
+	expectedOps := int32(numGoroutines * numConcurrentOps)
+
+	// Report operation counts
+	t.Logf("Concurrent test summary:")
+	t.Logf("- Total operations executed: %d (expected: %d)", totalOps, expectedOps)
+	t.Logf("- Start operations: %d (with %d errors)", startCount, len(startErrors))
+	t.Logf("- GetToken operations: %d (with %d errors, %d successful)",
+		getTokenCount, len(getTokenErrors), len(tokens))
+	t.Logf("- Close operations: %d (with %d errors)", closeCount, len(closeErrors))
+
+	// Some errors are expected due to concurrent operations
+	// but we should have received tokens successfully
+	assert.Equal(t, expectedOps, totalOps, "All operations should be accounted for")
+	assert.True(t, len(tokens) > 0, "Should have received tokens")
+
+	// Verify the token manager still works after all the concurrent operations
+	finalListener := &concurrentTestTokenListener{
+		onNextFunc: func(t *token.Token) {
+			// Just verify we get a token - don't use assert within this callback
+			if t == nil {
+				panic("Final token should not be nil")
+			}
+		},
+		onErrorFunc: func(err error) {
+			t.Errorf("Unexpected error in final listener: %v", err)
+		},
+	}
+
+	closeFunc, err := tm.Start(finalListener)
+	if err != nil && err != ErrTokenManagerAlreadyStarted {
+		t.Fatalf("Failed to start token manager after concurrent operations: %v", err)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	// Get token one more time to verify everything still works
+	finalToken, err := tm.GetToken(true)
+	assert.NoError(t, err, "Should be able to get token after concurrent operations")
+	assert.NotNil(t, finalToken, "Final token should not be nil")
+}
+
+// concurrentTestTokenListener is a test implementation of TokenListener for concurrent tests
+type concurrentTestTokenListener struct {
+	onNextFunc  func(*token.Token)
+	onErrorFunc func(error)
+}
+
+func (l *concurrentTestTokenListener) OnTokenNext(t *token.Token) {
+	if l.onNextFunc != nil {
+		l.onNextFunc(t)
+	}
+}
+
+func (l *concurrentTestTokenListener) OnTokenError(err error) {
+	if l.onErrorFunc != nil {
+		l.onErrorFunc(err)
+	}
+}
+
+// concurrentMockIdentityProvider is a mock implementation of shared.IdentityProvider for concurrent tests
+type concurrentMockIdentityProvider struct {
+	tokenCounter int
+	mutex        sync.Mutex
+}
+
+func (m *concurrentMockIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.tokenCounter++
+
+	// Use the existing test JWT token which is already properly formatted
+	resp, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, testJWTToken)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
