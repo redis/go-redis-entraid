@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"testing"
@@ -260,7 +261,7 @@ func TestConfidentialIdentityProvider_RequestToken(t *testing.T) {
 			Return(confidential.AuthResult{
 				ExpiresOn: expiresOn,
 			}, nil)
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		if err != nil {
 			t.Errorf("RequestToken() error = %v", err)
 			return
@@ -294,14 +295,14 @@ func TestConfidentialIdentityProvider_RequestToken(t *testing.T) {
 		provider.client = mClient
 		mClient.On("AcquireTokenByCredential", mock.Anything, mock.Anything).
 			Return(confidential.AuthResult{}, fmt.Errorf("error acquiring token"))
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		assert.ErrorContains(t, err, "failed to acquire token:")
 		assert.Empty(t, token, "RequestToken() token should be empty")
 	})
 	t.Run("without initialization", func(t *testing.T) {
 		t.Parallel()
 		provider := &ConfidentialIdentityProvider{}
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		assert.ErrorContains(t, err, "client is not initialized")
 		assert.Empty(t, token, "RequestToken() token should be empty")
 	})

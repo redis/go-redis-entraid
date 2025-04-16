@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -20,13 +21,13 @@ type TokenManagerOptions struct {
 	//
 	// default: 0.7
 	ExpirationRefreshRatio float64
-	// LowerRefreshBoundMs is the lower bound for the refresh time in milliseconds.
-	// Represents the minimum time in milliseconds before token expiration to trigger a refresh.
+	// LowerRefreshBound is the lower bound for the refresh time
+	// Represents the minimum time before token expiration to trigger a refresh.
 	// This value sets a fixed lower bound for when a token refresh should occur, regardless
 	// of the token's total lifetime.
 	//
-	// default: 0 ms (no lower bound, refresh based on ExpirationRefreshRatio)
-	LowerRefreshBoundMs int64
+	// default: 0 (no lower bound, refresh based on ExpirationRefreshRatio)
+	LowerRefreshBound time.Duration
 
 	// IdentityProviderResponseParser is an optional object that implements the IdentityProviderResponseParser interface.
 	// It is used to parse the response from the identity provider and extract the token.
@@ -41,6 +42,9 @@ type TokenManagerOptions struct {
 	//
 	// The default values are 3 attempts, 1000 ms initial delay, 10000 ms maximum delay, and 2.0 backoff multiplier.
 	RetryOptions RetryOptions
+
+	// RequestTimeout is the timeout for the request to the identity provider.
+	RequestTimeout time.Duration
 }
 
 // RetryOptions is a struct that contains the options for retrying the token request.
@@ -76,22 +80,22 @@ type TokenManager interface {
 	// It takes a boolean value forceRefresh as an argument.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a channel that will receive updates.
-	Start(listener TokenListener) (CloseFunc, error)
-	// Close closes the token manager and releases any resources.
-	Close() error
+	Start(listener TokenListener) (StopFunc, error)
+	// Stop stops the token manager and releases any resources.
+	Stop() error
 }
 
-// CloseFunc is a function that closes the token manager.
-type CloseFunc func() error
+// StopFunc is a function that stops the token manager.
+type StopFunc func() error
 
 // TokenListener is an interface that contains the methods for receiving updates from the token manager.
 // The token manager will call the listener's OnTokenNext method with the updated token.
 // If an error occurs, the token manager will call the listener's OnTokenError method with the error.
 type TokenListener interface {
-	// OnTokenNext is called when the token is updated.
-	OnTokenNext(t *token.Token)
-	// OnTokenError is called when an error occurs.
-	OnTokenError(err error)
+	// OnNext is called when the token is updated.
+	OnNext(t *token.Token)
+	// OnError is called when an error occurs.
+	OnError(err error)
 }
 
 // entraidIdentityProviderResponseParser is the default implementation of the IdentityProviderResponseParser interface.
@@ -111,15 +115,18 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		return nil, fmt.Errorf("identity provider is required")
 	}
 
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	return &entraidTokenManager{
 		idp:                            idp,
 		token:                          nil,
 		closedChan:                     nil,
+		ctx:                            ctx,
+		ctxCancel:                      ctxCancel,
 		expirationRefreshRatio:         options.ExpirationRefreshRatio,
-		lowerRefreshBoundMs:            options.LowerRefreshBoundMs,
-		lowerBoundDuration:             time.Duration(options.LowerRefreshBoundMs) * time.Millisecond,
+		lowerBoundDuration:             options.LowerRefreshBound,
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
+		requestTimeout:                 options.RequestTimeout,
 	}, nil
 }
 
@@ -146,8 +153,8 @@ type entraidTokenManager struct {
 
 	// listener is the single listener for the token manager.
 	// It is used to receive updates from the token manager.
-	// The token manager will call the listener's OnTokenNext method with the updated token.
-	// If an error occurs, the token manager will call the listener's OnTokenError method with the error.
+	// The token manager will call the listener's OnNext method with the updated token.
+	// If an error occurs, the token manager will call the listener's OnError method with the error.
 	// if listener is set, Start will fail
 	listener TokenListener
 
@@ -161,29 +168,39 @@ type entraidTokenManager struct {
 	// the token will be refreshed after 45 minutes. (the token is refreshed when 75% of its lifetime has passed)
 	expirationRefreshRatio float64
 
-	// lowerRefreshBoundMs is the lower bound for the refresh time in milliseconds.
-	// Represents the minimum time in milliseconds before token expiration to trigger a refresh, in milliseconds.
-	// This value sets a fixed lower bound for when a token refresh should occur, regardless
-	// of the token's total lifetime.
-	lowerRefreshBoundMs int64
-
 	// lowerBoundDuration is the lower bound for the refresh time in time.Duration.
 	lowerBoundDuration time.Duration
 
 	// closedChan is a channel that is closedChan when the token manager is closedChan.
 	// It is used to signal the token manager to stop requesting tokens.
 	closedChan chan struct{}
+
+	// context is the context used to request the token from the identity provider.
+	ctx context.Context
+
+	// ctxCancel is the cancel function for the context.
+	ctxCancel context.CancelFunc
+
+	// requestTimeout is the timeout for the request to the identity provider.
+	requestTimeout time.Duration
 }
 
 func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
 	e.tokenRWLock.RLock()
 	// check if the token is nil and if it is not expired
+
 	if !forceRefresh && e.token != nil && time.Now().Add(e.lowerBoundDuration).Before(e.token.ExpirationOn()) {
 		t := e.token
 		e.tokenRWLock.RUnlock()
 		return t, nil
 	}
 	e.tokenRWLock.RUnlock()
+
+	// start the context early,
+	// since at heavy concurrent load
+	// locks may take some time to acquire
+	ctx, ctxCancel := context.WithTimeout(e.ctx, e.requestTimeout)
+	defer ctxCancel()
 
 	// Upgrade to write lock for token update
 	e.tokenRWLock.Lock()
@@ -194,7 +211,8 @@ func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) 
 		return e.token, nil
 	}
 
-	idpResult, err := e.idp.RequestToken()
+	// Request a new token from the identity provider
+	idpResult, err := e.idp.RequestToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request token from idp: %w", err)
 	}
@@ -216,12 +234,12 @@ func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) 
 
 // Start starts the token manager and returns cancelFunc to stop the token manager.
 // It takes a TokenListener as an argument, which is used to receive updates.
-// The token manager will call the listener's OnTokenNext method with the updated token.
+// The token manager will call the listener's OnNext method with the updated token.
 // If an error occurs, the token manager will call the listener's OnError method with the error.
 //
 // Note: The initial token is delivered synchronously.
 // The TokenListener will receive the token immediately, before the token manager goroutine starts.
-func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
+func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.listener != nil {
@@ -236,12 +254,12 @@ func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
 
 	t, err := e.GetToken(true)
 	if err != nil {
-		go listener.OnTokenError(err)
+		go listener.OnError(err)
 		return nil, fmt.Errorf("failed to start token manager: %w", err)
 	}
 
 	// Deliver initial token synchronously
-	listener.OnTokenNext(t)
+	listener.OnNext(t)
 
 	e.closedChan = make(chan struct{})
 	e.listener = listener
@@ -271,15 +289,15 @@ func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
 				for i := 0; i < e.retryOptions.MaxAttempts; i++ {
 					t, err := e.GetToken(true)
 					if err == nil {
-						listener.OnTokenNext(t)
+						listener.OnNext(t)
 						break
 					}
 
 					// check if err is retriable
 					if e.retryOptions.IsRetryable(err) {
 						if i == e.retryOptions.MaxAttempts-1 {
-							// last attempt, call OnTokenError
-							listener.OnTokenError(fmt.Errorf("max attempts reached: %w", err))
+							// last attempt, call OnError
+							listener.OnError(fmt.Errorf("max attempts reached: %w", err))
 							return
 						}
 
@@ -299,7 +317,7 @@ func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
 						}
 					} else {
 						// not retriable
-						listener.OnTokenError(err)
+						listener.OnError(err)
 						return
 					}
 				}
@@ -307,17 +325,18 @@ func (e *entraidTokenManager) Start(listener TokenListener) (CloseFunc, error) {
 		}
 	}(listener, e.closedChan)
 
-	return e.Close, nil
+	return e.Stop, nil
 }
 
-// Close closes the token manager and releases any resources.
-func (e *entraidTokenManager) Close() error {
+// Stop closes the token manager and releases any resources.
+func (e *entraidTokenManager) Stop() error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	if e.closedChan == nil || e.listener == nil {
-		return ErrTokenManagerAlreadyClosed
+		return ErrTokenManagerAlreadyStopped
 	}
+
 	e.listener = nil
 	close(e.closedChan)
 

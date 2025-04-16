@@ -137,7 +137,7 @@ func TestRequestToken(t *testing.T) {
 				}
 			}
 
-			response, err := tt.provider.RequestToken()
+			response, err := tt.provider.RequestToken(context.Background())
 
 			if tt.expectedError != "" {
 				assert.Error(t, err)
@@ -207,7 +207,7 @@ func TestRequestToken_ErrorCases(t *testing.T) {
 			mockClient := tt.provider.client.(*MockManagedIdentityClient)
 			tt.setupMock(mockClient)
 
-			response, err := tt.provider.RequestToken()
+			response, err := tt.provider.RequestToken(context.Background())
 
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.expectedError)

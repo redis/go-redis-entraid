@@ -1,6 +1,8 @@
 package shared
 
 import (
+	"context"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 	"github.com/redis-developer/go-redis-entraid/internal"
@@ -38,8 +40,9 @@ type IdentityProviderResponse interface {
 // The identity provider is responsible for providing the raw authentication token.
 type IdentityProvider interface {
 	// RequestToken requests a token from the identity provider.
+	// The context is passed to the request to allow for cancellation and timeouts.
 	// It returns the token, the expiration time, and an error if any.
-	RequestToken() (IdentityProviderResponse, error)
+	RequestToken(ctx context.Context) (IdentityProviderResponse, error)
 }
 
 // NewIDPResponse creates a new auth result based on the type provided.

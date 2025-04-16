@@ -231,7 +231,7 @@ type TokenManagerOptions struct {
 
     // Optional: Minimum time before expiration to refresh (ms)
     // Default: 10000 (10 seconds)
-    LowerRefreshBoundMs int64
+    LowerRefreshBounds int64
 
     // Optional: Configuration for retry behavior
     RetryOptions RetryOptions
@@ -350,7 +350,7 @@ options := entraid.CredentialsProviderOptions{
     ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs: 10000,
+        LowerRefreshBounds: 10000,
     },
 }
 ```
@@ -361,7 +361,7 @@ options := entraid.CredentialsProviderOptions{
     ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs: 10000,
+        LowerRefreshBounds: 10000,
         RetryOptions: manager.RetryOptions{
             MaxAttempts: 3,
             InitialDelayMs: 1000,
@@ -516,7 +516,7 @@ func main() {
     tokenManager, err := manager.NewTokenManager(customProvider, manager.TokenManagerOptions{
         // Configure token refresh behavior
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs:   10000,
+        LowerRefreshBounds:   10000,
     })
     if err != nil {
         log.Fatalf("Failed to create token manager: %v", err)

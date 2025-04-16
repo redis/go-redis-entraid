@@ -343,7 +343,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 		mtm.On("GetToken", false).Return(testToken, nil)
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, testToken, nil)).
-			Return(manager.CloseFunc(mtm.Close), nil)
+			Return(manager.StopFunc(mtm.Stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
@@ -396,13 +396,13 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, nil, errTokenError)).
-			Return(manager.CloseFunc(mtm.Close), nil)
+			Return(manager.StopFunc(mtm.Stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
 		var wg sync.WaitGroup
 		listeners := make([]*mockCredentialsListener, numListeners)
-		cancels := make([]auth.CancelProviderFunc, numListeners)
+		cancels := make([]auth.UnsubscribeFunc, numListeners)
 
 		// Subscribe multiple listeners concurrently
 		for i := 0; i < numListeners; i++ {
@@ -467,7 +467,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, nil, errTokenError)).
-			Return(manager.CloseFunc(mtm.Close), nil)
+			Return(manager.StopFunc(mtm.Stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
@@ -525,7 +525,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 		require.NotNil(t, provider)
 		var wg sync.WaitGroup
 		listeners := make([]*mockCredentialsListener, numListeners)
-		cancels := make([]auth.CancelProviderFunc, numListeners)
+		cancels := make([]auth.UnsubscribeFunc, numListeners)
 
 		// Subscribe multiple listeners concurrently
 		for i := 0; i < numListeners; i++ {

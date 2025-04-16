@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"net"
 	"os"
 	"time"
@@ -81,8 +82,8 @@ type mockIdentityProvider struct {
 	mock.Mock
 }
 
-func (m *mockIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
-	args := m.Called()
+func (m *mockIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -138,11 +139,11 @@ type mockTokenListener struct {
 	Id int32
 }
 
-func (m *mockTokenListener) OnTokenNext(token *token.Token) {
+func (m *mockTokenListener) OnNext(token *token.Token) {
 	_ = m.Called(token)
 }
 
-func (m *mockTokenListener) OnTokenError(err error) {
+func (m *mockTokenListener) OnError(err error) {
 	_ = m.Called(err)
 }
 

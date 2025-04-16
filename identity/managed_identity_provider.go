@@ -101,7 +101,7 @@ func NewManagedIdentityProvider(opts ManagedIdentityProviderOptions) (*ManagedId
 
 // RequestToken requests a token from the managed identity provider.
 // It returns IdentityProviderResponse, which contains the Acc and the expiration time.
-func (m *ManagedIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+func (m *ManagedIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
 	if m.client == nil {
 		return nil, errors.New("managed identity client is not initialized")
 	}
@@ -115,7 +115,7 @@ func (m *ManagedIdentityProvider) RequestToken() (shared.IdentityProviderRespons
 	}
 	// acquire token using the managed identity client
 	// the resource is the URL of the resource that the identity has access to
-	authResult, err := m.client.AcquireToken(context.TODO(), resource)
+	authResult, err := m.client.AcquireToken(ctx, resource)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't acquire token: %w", err)
 	}
