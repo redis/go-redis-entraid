@@ -58,14 +58,14 @@ type RetryOptions struct {
 	//
 	// default: 3
 	MaxAttempts int
-	// InitialDelayMs is the initial delay in milliseconds before retrying the token request.
+	// InitialDelay is the initial delay before retrying the token request.
 	//
-	// default: 1000 ms
-	InitialDelayMs int
-	// MaxDelayMs is the maximum delay in milliseconds between retry attempts.
+	// default: 1 second
+	InitialDelay time.Duration
+	// MaxDelay is the maximum delay between retry attempts.
 	//
-	// default: 10000 ms
-	MaxDelayMs int
+	// default: 10 seconds
+	MaxDelay time.Duration
 	// BackoffMultiplier is the multiplier for the backoff delay.
 	// default: 2.0
 	BackoffMultiplier float64
@@ -265,8 +265,8 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 	e.listener = listener
 
 	go func(listener TokenListener, closed <-chan struct{}) {
-		maxDelay := time.Duration(e.retryOptions.MaxDelayMs) * time.Millisecond
-		initialDelay := time.Duration(e.retryOptions.InitialDelayMs) * time.Millisecond
+		maxDelay := e.retryOptions.MaxDelay
+		initialDelay := e.retryOptions.InitialDelay
 
 		for {
 			timeToRenewal := e.durationToRenewal()

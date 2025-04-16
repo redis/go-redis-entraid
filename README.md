@@ -229,15 +229,18 @@ type TokenManagerOptions struct {
     // Default: 0.7 (refresh at 70% of token lifetime)
     ExpirationRefreshRatio float64
 
-    // Optional: Minimum time before expiration to refresh (ms)
-    // Default: 10000 (10 seconds)
-    LowerRefreshBounds int64
+    // Optional: Minimum time before expiration to trigger refresh
+    // Default: 0 (no lower bound, refresh based on ExpirationRefreshRatio)
+    LowerRefreshBound time.Duration
+
+    // Optional: Custom response parser
+    IdentityProviderResponseParser shared.IdentityProviderResponseParser
 
     // Optional: Configuration for retry behavior
     RetryOptions RetryOptions
 
-    // Optional: Custom response parser
-    IdentityProviderResponseParser IdentityProviderResponseParser
+    // Optional: Timeout for token requests
+    RequestTimeout time.Duration
 }
 ```
 
@@ -245,24 +248,25 @@ type TokenManagerOptions struct {
 Options for retry behavior:
 ```go
 type RetryOptions struct {
+    // Optional: Function to determine if an error is retryable
+    // Default: Checks for network errors and timeouts
+    IsRetryable func(err error) bool
+
     // Optional: Maximum number of retry attempts
     // Default: 3
     MaxAttempts int
 
-    // Optional: Initial delay between retries (ms)
-    // Default: 1000 (1 second)
-    InitialDelayMs int64
+    // Optional: Initial delay between retries
+    // Default: 1 second
+    InitialDelay time.Duration
 
-    // Optional: Maximum delay between retries (ms)
-    // Default: 30000 (30 seconds)
-    MaxDelayMs int64
+    // Optional: Maximum delay between retries
+    // Default: 10 seconds
+    MaxDelay time.Duration
 
     // Optional: Multiplier for exponential backoff
     // Default: 2.0
     BackoffMultiplier float64
-
-    // Optional: Custom retry predicate
-    IsRetryable func(error) bool
 }
 ```
 
@@ -364,8 +368,8 @@ options := entraid.CredentialsProviderOptions{
         LowerRefreshBounds: 10000,
         RetryOptions: manager.RetryOptions{
             MaxAttempts: 3,
-            InitialDelayMs: 1000,
-            MaxDelayMs: 30000,
+            InitialDelay: 1000 * time.Millisecond,
+            MaxDelay: 30000 * time.Millisecond,
             BackoffMultiplier: 2.0,
             IsRetryable: func(err error) bool {
                 return strings.Contains(err.Error(), "network error") ||
@@ -475,6 +479,7 @@ import (
     "fmt"
     "log"
     "os"
+    "strings"
     "time"
 
     "github.com/redis-developer/go-redis-entraid/entraid"
@@ -516,7 +521,18 @@ func main() {
     tokenManager, err := manager.NewTokenManager(customProvider, manager.TokenManagerOptions{
         // Configure token refresh behavior
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBounds:   10000,
+        LowerRefreshBound:     time.Second * 10,
+        RetryOptions: manager.RetryOptions{
+            MaxAttempts:        3,
+            InitialDelay:       time.Second,
+            MaxDelay:          time.Second * 10,
+            BackoffMultiplier: 2.0,
+            IsRetryable: func(err error) bool {
+                return strings.Contains(err.Error(), "network error") ||
+                    strings.Contains(err.Error(), "timeout")
+            },
+        },
+        RequestTimeout: time.Second * 30,
     })
     if err != nil {
         log.Fatalf("Failed to create token manager: %v", err)
@@ -561,6 +577,7 @@ Key points about this implementation:
    - Uses our `TokenManager` for automatic token refresh
    - Benefits from our retry mechanisms
    - Handles token caching and lifecycle
+   - Configurable refresh timing and retry behavior
 
 3. **Streaming Credentials**:
    - Uses our `StreamingCredentialsProvider` for Redis integration
@@ -631,7 +648,53 @@ func TestRedisConnection(t *testing.T) {
 ## FAQ
 
 ### Q: How do I handle token expiration?
-A: The library handles token expiration automatically. Tokens are refreshed when they reach 70% of their lifetime (configurable via `ExpirationRefreshRatio`). You can customize this behavior using `TokenManagerOptions`.
+A: The library handles token expiration automatically. Tokens are refreshed when they reach 70% of their lifetime (configurable via `ExpirationRefreshRatio`). You can also set a minimum time before expiration to trigger refresh using `LowerRefreshBound`. The token manager will automatically handle token refresh and caching.
+
+### Q: How do I handle connection failures?
+A: The library includes built-in retry mechanisms in the TokenManager. You can configure retry behavior using `RetryOptions`:
+```go
+RetryOptions: manager.RetryOptions{
+    MaxAttempts:        3,
+    InitialDelay:       time.Second,
+    MaxDelay:          time.Second * 10,
+    BackoffMultiplier: 2.0,
+    IsRetryable: func(err error) bool {
+        return strings.Contains(err.Error(), "network error") ||
+            strings.Contains(err.Error(), "timeout")
+    },
+}
+```
+
+### Q: What happens if token refresh fails?
+A: The library will retry according to the configured `RetryOptions`. If all retries fail, the error will be propagated to the client. You can customize the retry behavior by:
+1. Setting the maximum number of attempts
+2. Configuring the initial and maximum delay between retries using `time.Duration` values
+3. Setting the backoff multiplier for exponential backoff
+4. Providing a custom function to determine which errors are retryable
+
+### Q: How do I implement custom authentication?
+A: You can create a custom identity provider by implementing the `IdentityProvider` interface:
+```go
+type IdentityProvider interface {
+    // RequestToken requests a token from the identity provider.
+    // It returns the token, the expiration time, and an error if any.
+    RequestToken() (IdentityProviderResponse, error)
+}
+```
+
+The `IdentityProviderResponse` interface provides methods to access the authentication result:
+```go
+type IdentityProviderResponse interface {
+    // Type returns the type of the auth result
+    Type() string
+    AuthResult() public.AuthResult
+    AccessToken() azcore.AccessToken
+    RawToken() string
+}
+```
+
+### Q: Can I customize how token responses are parsed?
+A: Yes, you can provide a custom `IdentityProviderResponseParser` in the `TokenManagerOptions`. This allows you to handle custom token formats or implement special parsing logic.
 
 ### Q: What's the difference between managed identity types?
 A: There are three main types of managed identities in Azure:
@@ -665,56 +728,3 @@ The choice between these types depends on your specific use case:
 - Use System Assigned for single-resource applications
 - Use User Assigned for shared identity scenarios
 - Use Default Azure Identity for development and testing
-
-### Q: How do I handle connection failures?
-A: The library includes built-in retry mechanisms in the TokenManager. You can configure retry behavior using `RetryOptions`:
-```go
-RetryOptions: manager.RetryOptions{
-    MaxAttempts: 3,
-    InitialDelayMs: 1000,
-    MaxDelayMs: 30000,
-    BackoffMultiplier: 2.0,
-}
-```
-
-### Q: Does this work with Redis Cluster?
-A: Yes, the library works with both standalone Redis and Redis Cluster. Use the appropriate Redis client constructor:
-```go
-// For standalone Redis
-client := redis.NewClient(&redis.Options{
-    Addr: "your-endpoint:6380",
-    StreamingCredentialsProvider: provider,
-})
-
-// For Redis Cluster
-client := redis.NewClusterClient(&redis.ClusterOptions{
-    Addrs: []string{"your-endpoint:6380"},
-    StreamingCredentialsProvider: provider,
-})
-```
-
-### Q: How do I implement custom authentication?
-A: You can create a custom identity provider by implementing the `IdentityProvider` interface:
-```go
-// IdentityProviderResponse is an interface that defines the methods for an identity provider authentication result.
-// It is used to get the type of the authentication result, the authentication result itself (can be AuthResult or AccessToken),
-type IdentityProviderResponse interface {
-	// Type returns the type of the auth result
-	Type() string
-	AuthResult() public.AuthResult
-	AccessToken() azcore.AccessToken
-	RawToken() string
-}
-
-// IdentityProvider is an interface that defines the methods for an identity provider.
-// It is used to request a token for authentication.
-// The identity provider is responsible for providing the raw authentication token.
-type IdentityProvider interface {
-	// RequestToken requests a token from the identity provider.
-	// It returns the token, the expiration time, and an error if any.
-	RequestToken() (IdentityProviderResponse, error)
-}
-```
-
-### Q: What happens if token refresh fails?
-A: The library will retry according to the configured `RetryOptions`. If all retries fail, the error will be propagated to the client.

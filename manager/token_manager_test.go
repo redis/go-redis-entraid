@@ -88,8 +88,8 @@ func TestTokenManagerWithOptions(t *testing.T) {
 		assert.NotNil(t, tm.retryOptions.IsRetryable)
 		assertFuncNameMatches(t, tm.retryOptions.IsRetryable, defaultIsRetryable)
 		assert.Equal(t, DefaultRetryOptionsMaxAttempts, tm.retryOptions.MaxAttempts)
-		assert.Equal(t, DefaultRetryOptionsInitialDelayMs, tm.retryOptions.InitialDelayMs)
-		assert.Equal(t, DefaultRetryOptionsMaxDelayMs, tm.retryOptions.MaxDelayMs)
+		assert.Equal(t, DefaultRetryOptionsInitialDelay, tm.retryOptions.InitialDelay)
+		assert.Equal(t, DefaultRetryOptionsMaxDelay, tm.retryOptions.MaxDelay)
 		assert.Equal(t, DefaultRetryOptionsBackoffMultiplier, tm.retryOptions.BackoffMultiplier)
 	})
 }
@@ -865,7 +865,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		<-time.After(10 * time.Millisecond)
 		assert.NoError(t, cancel())
 
-		assert.InDelta(t, stop.Sub(start), time.Duration(tm.retryOptions.InitialDelayMs)*time.Millisecond, float64(200*time.Millisecond))
+		assert.InDelta(t, stop.Sub(start), tm.retryOptions.InitialDelay, float64(200*time.Millisecond))
 
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		listener.AssertNumberOfCalls(t, "OnNext", 2)
@@ -880,7 +880,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			TokenManagerOptions{
 				LowerRefreshBound: time.Hour,
 				RetryOptions: RetryOptions{
-					InitialDelayMs: 5000, // 5 seconds
+					InitialDelay: 5 * time.Second,
 				},
 			},
 		)
@@ -916,7 +916,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(time.Duration(tm.retryOptions.InitialDelayMs/2) * time.Millisecond)
+		<-time.After(time.Duration(tm.retryOptions.InitialDelay / 2))
 		assert.NoError(t, cancel())
 		assert.Nil(t, tm.listener)
 		assert.Panics(t, func() {
@@ -1090,14 +1090,14 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		idp := &mockIdentityProvider{}
 		listener := &mockTokenListener{}
 		maxAttempts := 3
-		maxDelayMs := 500
-		initialDelayMs := 100
+		maxDelay := 500 * time.Millisecond
+		initialDelay := 100 * time.Millisecond
 		tokenManager, err := NewTokenManager(idp,
 			TokenManagerOptions{
 				RetryOptions: RetryOptions{
 					MaxAttempts:       maxAttempts,
-					MaxDelayMs:        maxDelayMs,
-					InitialDelayMs:    initialDelayMs,
+					MaxDelay:          maxDelay,
+					InitialDelay:      initialDelay,
 					BackoffMultiplier: 10,
 				},
 			},
@@ -1158,15 +1158,15 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
 		select {
-		case <-time.After(toRenewal + time.Duration(maxAttempts*maxDelayMs)*time.Millisecond):
+		case <-time.After(toRenewal + time.Duration(maxAttempts)*maxDelay):
 			assert.Fail(t, "Timeout - max retries not reached")
 		case <-maxAttemptsReached:
 		}
 
 		// initialRenewal window, maxAttempts - 1 * max delay + the initial one which was lower than max delay
 		allDelaysShouldBe := toRenewal
-		allDelaysShouldBe += time.Duration(initialDelayMs) * time.Millisecond
-		allDelaysShouldBe += time.Duration(maxAttempts-1) * time.Duration(maxDelayMs) * time.Millisecond
+		allDelaysShouldBe += initialDelay
+		allDelaysShouldBe += time.Duration(maxAttempts-1) * maxDelay
 
 		assert.InEpsilon(t, elapsed, allDelaysShouldBe, float64(10*time.Millisecond))
 

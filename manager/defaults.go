@@ -15,9 +15,9 @@ import (
 const (
 	DefaultExpirationRefreshRatio        = 0.7
 	DefaultRetryOptionsMaxAttempts       = 3
-	DefaultRetryOptionsInitialDelayMs    = 1000
 	DefaultRetryOptionsBackoffMultiplier = 2.0
-	DefaultRetryOptionsMaxDelayMs        = 10000
+	DefaultRetryOptionsInitialDelay      = 1000 * time.Millisecond
+	DefaultRetryOptionsMaxDelay          = 10000 * time.Millisecond
 )
 
 // defaultIsRetryable is a function that checks if the error is retriable.
@@ -57,14 +57,14 @@ func defaultRetryOptionsOr(retryOptions RetryOptions) RetryOptions {
 	if retryOptions.MaxAttempts <= 0 {
 		retryOptions.MaxAttempts = DefaultRetryOptionsMaxAttempts
 	}
-	if retryOptions.InitialDelayMs == 0 {
-		retryOptions.InitialDelayMs = DefaultRetryOptionsInitialDelayMs
+	if retryOptions.InitialDelay == 0 {
+		retryOptions.InitialDelay = DefaultRetryOptionsInitialDelay
 	}
 	if retryOptions.BackoffMultiplier == 0 {
 		retryOptions.BackoffMultiplier = DefaultRetryOptionsBackoffMultiplier
 	}
-	if retryOptions.MaxDelayMs == 0 {
-		retryOptions.MaxDelayMs = DefaultRetryOptionsMaxDelayMs
+	if retryOptions.MaxDelay == 0 {
+		retryOptions.MaxDelay = DefaultRetryOptionsMaxDelay
 	}
 	return retryOptions
 }
