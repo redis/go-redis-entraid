@@ -498,14 +498,14 @@ type CustomIdentityProvider struct {
 }
 
 // RequestToken implements the IdentityProvider interface
-func (p *CustomIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+func (p *CustomIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
     // Implement your custom token retrieval logic here
     // This could be calling your own auth service, using a different auth protocol, etc.
     
     // For this example, we'll simulate getting a JWT token
     token := "your.jwt.token"
     
-    // Create a response using NewIDPResponse with RawToken type
+    // Create a response using NewIDPResponse
     return shared.NewIDPResponse(shared.ResponseTypeRawToken, token)
 }
 
@@ -677,19 +677,82 @@ A: You can create a custom identity provider by implementing the `IdentityProvid
 ```go
 type IdentityProvider interface {
     // RequestToken requests a token from the identity provider.
+    // The context is passed to the request to allow for cancellation and timeouts.
     // It returns the token, the expiration time, and an error if any.
-    RequestToken() (IdentityProviderResponse, error)
+    RequestToken(ctx context.Context) (IdentityProviderResponse, error)
 }
 ```
 
-The `IdentityProviderResponse` interface provides methods to access the authentication result:
+The response types are defined as constants:
 ```go
+const (
+    // ResponseTypeAuthResult is the type of the auth result.
+    ResponseTypeAuthResult = "AuthResult"
+    // ResponseTypeAccessToken is the type of the access token.
+    ResponseTypeAccessToken = "AccessToken"
+    // ResponseTypeRawToken is the type of the response when you have a raw string.
+    ResponseTypeRawToken = "RawToken"
+)
+```
+
+The `IdentityProviderResponse` interface and related interfaces provide methods to access the authentication result:
+```go
+// IdentityProviderResponse is the base interface that defines the type method
 type IdentityProviderResponse interface {
-    // Type returns the type of the auth result
+    // Type returns the type of identity provider response
     Type() string
+}
+
+// AuthResultIDPResponse defines the method for getting the auth result
+type AuthResultIDPResponse interface {
     AuthResult() public.AuthResult
+}
+
+// AccessTokenIDPResponse defines the method for getting the access token
+type AccessTokenIDPResponse interface {
     AccessToken() azcore.AccessToken
+}
+
+// RawTokenIDPResponse defines the method for getting the raw token
+type RawTokenIDPResponse interface {
     RawToken() string
+}
+```
+
+You can create a new response using the `NewIDPResponse` function:
+```go
+// NewIDPResponse creates a new auth result based on the type provided.
+// Type can be either AuthResult, AccessToken, or RawToken.
+// Second argument is the result of the type provided in the first argument.
+func NewIDPResponse(responseType string, result interface{}) (IdentityProviderResponse, error)
+```
+
+Here's an example of how to use these types in a custom identity provider:
+```go
+type CustomIdentityProvider struct {
+    tokenEndpoint string
+    clientID      string
+    clientSecret  string
+}
+
+func (p *CustomIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
+    // Get the token from your custom auth service
+    token, err := p.getTokenFromCustomService()
+    if err != nil {
+        return nil, err
+    }
+
+    // Create a response based on the token type
+    switch token.Type {
+    case "jwt":
+        return shared.NewIDPResponse(shared.ResponseTypeRawToken, token.Value)
+    case "access_token":
+        return shared.NewIDPResponse(shared.ResponseTypeAccessToken, token.Value)
+    case "auth_result":
+        return shared.NewIDPResponse(shared.ResponseTypeAuthResult, token.Value)
+    default:
+        return nil, fmt.Errorf("unsupported token type: %s", token.Type)
+    }
 }
 ```
 
