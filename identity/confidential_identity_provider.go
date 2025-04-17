@@ -124,7 +124,7 @@ func NewConfidentialIdentityProvider(opts ConfidentialIdentityProviderOptions) (
 		}
 	case ClientCertificateCredentialType:
 		// ClientCertificateCredentialType is the type of credentials that uses a client certificate to authenticate.
-		if opts.ClientCert == nil || len(opts.ClientCert) == 0 {
+		if len(opts.ClientCert) == 0 {
 			return nil, fmt.Errorf("non-empty client certificate is required when using client certificate credentials")
 		}
 		if opts.ClientPrivateKey == nil {

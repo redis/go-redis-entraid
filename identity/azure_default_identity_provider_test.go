@@ -52,11 +52,11 @@ func TestAzureDefaultIdentityProvider_RequestToken(t *testing.T) {
 	mCredFactory := &mockCredFactory{}
 	mCredFactory.On("NewDefaultAzureCredential", mock.Anything).Return(mCreds, nil)
 	provider.credFactory = mCredFactory
-	token, err = provider.RequestToken(context.Background())
-	assert.NotNil(t, token, "token should not be nil")
-	assert.NoError(t, err, "failed to request token")
-	assert.Equal(t, shared.ResponseTypeAccessToken, token.Type(), "token type should be access token")
-	assert.Equal(t, mToken, token.AccessToken(), "access token should be equal to testJWTToken")
+	resp, err := provider.RequestToken(context.Background())
+	assert.NotNil(t, resp, "resp should not be nil")
+	assert.NoError(t, err, "failed to request resp")
+	assert.Equal(t, shared.ResponseTypeAccessToken, resp.Type(), "resp type should be access resp")
+	assert.Equal(t, mToken, resp.(shared.AccessTokenIDPResponse).AccessToken(), "access token should be equal to testJWTToken")
 }
 
 func TestAzureDefaultIdentityProvider_RequestTokenWithScopes(t *testing.T) {
@@ -84,19 +84,19 @@ func TestAzureDefaultIdentityProvider_RequestTokenWithScopes(t *testing.T) {
 		mCredFactory := &mockCredFactory{}
 		mCredFactory.On("NewDefaultAzureCredential", mock.Anything).Return(mCreds, nil)
 		provider.credFactory = mCredFactory
-		token, err = provider.RequestToken(context.Background())
-		assert.NotNil(t, token, "token should not be nil")
-		assert.NoError(t, err, "failed to request token")
-		assert.Equal(t, shared.ResponseTypeAccessToken, token.Type(), "token type should be access token")
-		assert.Equal(t, mToken, token.AccessToken(), "access token should be equal to testJWTToken")
+		resp, err := provider.RequestToken(context.Background())
+		assert.NotNil(t, resp, "resp should not be nil")
+		assert.NoError(t, err, "failed to request resp")
+		assert.Equal(t, shared.ResponseTypeAccessToken, resp.Type(), "resp type should be access resp")
+		assert.Equal(t, mToken, resp.(shared.AccessTokenIDPResponse).AccessToken(), "access resp should be equal to testJWTToken")
 	})
 	t.Run("RequestToken with error from credFactory", func(t *testing.T) {
 		// use mockAzureCredential to simulate the environment
 		mCredFactory := &mockCredFactory{}
 		mCredFactory.On("NewDefaultAzureCredential", mock.Anything).Return(nil, assert.AnError)
 		provider.credFactory = mCredFactory
-		token, err := provider.RequestToken(context.Background())
-		assert.Nil(t, token, "token should be nil")
-		assert.Error(t, err, "failed to request token")
+		resp, err := provider.RequestToken(context.Background())
+		assert.Nil(t, resp, "resp should be nil")
+		assert.Error(t, err, "failed to request resp")
 	})
 }

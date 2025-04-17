@@ -25,13 +25,28 @@ type IdentityProviderResponseParser interface {
 	ParseResponse(response IdentityProviderResponse) (*token.Token, error)
 }
 
-// IdentityProviderResponse is an interface that defines the methods for an identity provider authentication result.
-// It is used to get the type of the authentication result, the authentication result itself (can be AuthResult or AccessToken),
+// IdentityProviderResponse is an interface that defines the
+// type method for the identity provider response. It is used to
+// identify the type of response returned by the identity provider.
+// The type can be either AuthResult, AccessToken, or RawToken. You can
+// use this interface to check the type of the response and handle it accordingly.
 type IdentityProviderResponse interface {
-	// Type returns the type of the auth result
+	// Type returns the type of identity provider response
 	Type() string
+}
+
+// AuthResultIDPResponse is an interface that defines the method for getting the auth result.
+type AuthResultIDPResponse interface {
 	AuthResult() public.AuthResult
+}
+
+// AccessTokenIDPResponse is an interface that defines the method for getting the access token.
+type AccessTokenIDPResponse interface {
 	AccessToken() azcore.AccessToken
+}
+
+// RawTokenIDPResponse is an interface that defines the method for getting the raw token.
+type RawTokenIDPResponse interface {
 	RawToken() string
 }
 

@@ -80,11 +80,6 @@ func (a *IDPResp) AuthResult() public.AuthResult {
 	return *a.authResultVal
 }
 
-// HasAuthResult returns true if an AuthResult is set
-func (a *IDPResp) HasAuthResult() bool {
-	return a.authResultVal != nil
-}
-
 // AccessToken returns the AccessToken if present, or an empty AccessToken if not set
 // Use HasAccessToken() to check if the value is actually set
 func (a *IDPResp) AccessToken() azcore.AccessToken {
@@ -94,17 +89,7 @@ func (a *IDPResp) AccessToken() azcore.AccessToken {
 	return *a.accessTokenVal
 }
 
-// HasAccessToken returns true if an AccessToken is set
-func (a *IDPResp) HasAccessToken() bool {
-	return a.accessTokenVal != nil
-}
-
 // RawToken returns the raw token string
 func (a *IDPResp) RawToken() string {
 	return a.rawTokenVal
-}
-
-// HasRawToken returns true if a raw token is set
-func (a *IDPResp) HasRawToken() bool {
-	return a.rawTokenVal != ""
 }

@@ -156,12 +156,12 @@ func TestNewIDPResponse(t *testing.T) {
 
 			switch tt.responseType {
 			case ResponseTypeAuthResult:
-				assert.NotNil(t, resp.AuthResult())
+				assert.NotNil(t, resp.(AuthResultIDPResponse).AuthResult())
 			case ResponseTypeAccessToken:
-				assert.NotNil(t, resp.AccessToken())
-				assert.NotEmpty(t, resp.AccessToken().Token)
+				assert.NotNil(t, resp.(AccessTokenIDPResponse).AccessToken())
+				assert.NotEmpty(t, resp.(AccessTokenIDPResponse).AccessToken().Token)
 			case ResponseTypeRawToken:
-				assert.NotEmpty(t, resp.RawToken())
+				assert.NotEmpty(t, resp.(RawTokenIDPResponse).RawToken())
 			}
 		})
 	}
@@ -271,7 +271,7 @@ func TestIdentityProvider(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
 				assert.Equal(t, ResponseTypeRawToken, response.Type())
-				assert.Equal(t, "test-token", response.RawToken())
+				assert.Equal(t, "test-token", response.(RawTokenIDPResponse).RawToken())
 			}
 		})
 	}

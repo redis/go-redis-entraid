@@ -171,10 +171,7 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAuthResult())
 				assert.Equal(t, "test-token", resp.AuthResult().AccessToken)
-				assert.False(t, resp.HasAccessToken())
-				assert.False(t, resp.HasRawToken())
 			},
 		},
 		{
@@ -185,7 +182,6 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAuthResult())
 				assert.Equal(t, "test-token", resp.AuthResult().AccessToken)
 			},
 		},
@@ -198,7 +194,6 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAccessToken())
 				assert.Equal(t, "test-token", resp.AccessToken().Token)
 				assert.Equal(t, "test-token", resp.RawToken())
 			},
@@ -212,7 +207,6 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAccessToken())
 				assert.Equal(t, "test-token", resp.AccessToken().Token)
 				assert.Equal(t, "test-token", resp.RawToken())
 			},
@@ -223,10 +217,7 @@ func TestNewIDPResp(t *testing.T) {
 			result:     "test-token",
 			wantErr:    false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasRawToken())
 				assert.Equal(t, "test-token", resp.RawToken())
-				assert.False(t, resp.HasAuthResult())
-				assert.False(t, resp.HasAccessToken())
 			},
 		},
 		{
@@ -235,7 +226,6 @@ func TestNewIDPResp(t *testing.T) {
 			result:     stringPtr("test-token"),
 			wantErr:    false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasRawToken())
 				assert.Equal(t, "test-token", resp.RawToken())
 			},
 		},

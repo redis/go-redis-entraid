@@ -104,7 +104,7 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 	switch response.Type() {
 	case shared.ResponseTypeAuthResult:
-		authResult := response.AuthResult()
+		authResult := response.(shared.AuthResultIDPResponse).AuthResult()
 		if authResult.ExpiresOn.IsZero() {
 			return nil, fmt.Errorf("auth result expiration time is not set")
 		}
@@ -117,10 +117,10 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		expiresOn = authResult.ExpiresOn.UTC()
 
 	case shared.ResponseTypeRawToken, shared.ResponseTypeAccessToken:
-		tokenStr := response.RawToken()
+		tokenStr := response.(shared.RawTokenIDPResponse).RawToken()
 
 		if response.Type() == shared.ResponseTypeAccessToken {
-			accessToken := response.AccessToken()
+			accessToken := response.(shared.AccessTokenIDPResponse).AccessToken()
 			if accessToken.Token == "" {
 				return nil, fmt.Errorf("access token value is empty")
 			}
