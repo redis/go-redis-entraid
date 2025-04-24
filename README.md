@@ -10,6 +10,7 @@ Entra ID extension for go-redis
 - [Examples](#examples)
 - [Testing](#testing)
 - [FAQ](#faq)
+- [Error Handling](#error-handling)
 
 ## Introduction
 
@@ -607,12 +608,23 @@ func TestManagedIdentityProvider(t *testing.T) {
     }
 
     // Test token retrieval
-    token, err := provider.GetToken(context.Background())
+    response, err := provider.RequestToken(context.Background())
     if err != nil {
         t.Fatalf("Failed to get token: %v", err)
     }
-    if token == "" {
-        t.Error("Expected non-empty token")
+
+    // Check response type and get token
+    switch response.Type() {
+    case shared.ResponseTypeRawToken:
+        token, err := response.(shared.RawTokenIDPResponse).RawToken()
+        if err != nil {
+            t.Fatalf("Failed to get raw token: %v", err)
+        }
+        if token == "" {
+            t.Error("Expected non-empty token")
+        }
+    default:
+        t.Errorf("Unexpected response type: %s", response.Type())
     }
 }
 ```
@@ -705,17 +717,23 @@ type IdentityProviderResponse interface {
 
 // AuthResultIDPResponse defines the method for getting the auth result
 type AuthResultIDPResponse interface {
-    AuthResult() public.AuthResult
+    // AuthResult returns the Microsoft Authentication Library AuthResult.
+    // Returns ErrAuthResultNotFound if the auth result is not set.
+    AuthResult() (public.AuthResult, error)
 }
 
 // AccessTokenIDPResponse defines the method for getting the access token
 type AccessTokenIDPResponse interface {
-    AccessToken() azcore.AccessToken
+    // AccessToken returns the Azure SDK AccessToken.
+    // Returns ErrAccessTokenNotFound if the access token is not set.
+    AccessToken() (azcore.AccessToken, error)
 }
 
 // RawTokenIDPResponse defines the method for getting the raw token
 type RawTokenIDPResponse interface {
-    RawToken() string
+    // RawToken returns the raw token string.
+    // Returns ErrRawTokenNotFound if the raw token is not set.
+    RawToken() (string, error)
 }
 ```
 
@@ -752,6 +770,43 @@ func (p *CustomIdentityProvider) RequestToken(ctx context.Context) (shared.Ident
         return shared.NewIDPResponse(shared.ResponseTypeAuthResult, token.Value)
     default:
         return nil, fmt.Errorf("unsupported token type: %s", token.Type)
+    }
+}
+
+// Example usage:
+func main() {
+    provider := &CustomIdentityProvider{
+        tokenEndpoint: "https://your-auth-endpoint.com/token",
+        clientID:      os.Getenv("CUSTOM_CLIENT_ID"),
+        clientSecret:  os.Getenv("CUSTOM_CLIENT_SECRET"),
+    }
+
+    response, err := provider.RequestToken(context.Background())
+    if err != nil {
+        log.Fatalf("Failed to get token: %v", err)
+    }
+
+    switch response.Type() {
+    case shared.ResponseTypeRawToken:
+        token, err := response.(shared.RawTokenIDPResponse).RawToken()
+        if err != nil {
+            log.Fatalf("Failed to get raw token: %v", err)
+        }
+        log.Printf("Got raw token: %s", token)
+
+    case shared.ResponseTypeAccessToken:
+        token, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+        if err != nil {
+            log.Fatalf("Failed to get access token: %v", err)
+        }
+        log.Printf("Got access token: %s", token.Token)
+
+    case shared.ResponseTypeAuthResult:
+        result, err := response.(shared.AuthResultIDPResponse).AuthResult()
+        if err != nil {
+            log.Fatalf("Failed to get auth result: %v", err)
+        }
+        log.Printf("Got auth result: %s", result.AccessToken)
     }
 }
 ```
@@ -791,3 +846,93 @@ The choice between these types depends on your specific use case:
 - Use System Assigned for single-resource applications
 - Use User Assigned for shared identity scenarios
 - Use Default Azure Identity for development and testing
+
+## Error Handling
+
+### Available Errors
+
+The library provides several error types that you can check against:
+
+```go
+// Import the shared package to access error types
+import "github.com/redis-developer/go-redis-entraid/shared"
+
+// Available error types:
+var (
+    // ErrInvalidIDPResponse is returned when the response from the identity provider is invalid
+    ErrInvalidIDPResponse = shared.ErrInvalidIDPResponse
+
+    // ErrInvalidIDPResponseType is returned when the response type is not supported
+    ErrInvalidIDPResponseType = shared.ErrInvalidIDPResponseType
+
+    // ErrAuthResultNotFound is returned when trying to get an AuthResult that is not set
+    ErrAuthResultNotFound = shared.ErrAuthResultNotFound
+
+    // ErrAccessTokenNotFound is returned when trying to get an AccessToken that is not set
+    ErrAccessTokenNotFound = shared.ErrAccessTokenNotFound
+
+    // ErrRawTokenNotFound is returned when trying to get a RawToken that is not set
+    ErrRawTokenNotFound = shared.ErrRawTokenNotFound
+)
+```
+
+### Error Handling Example
+
+Here's how to handle errors when working with identity provider responses:
+
+```go
+// Example of handling different response types and their errors
+response, err := identityProvider.RequestToken(ctx)
+if err != nil {
+    // Handle request error
+    return err
+}
+
+switch response.Type() {
+case shared.ResponseTypeAuthResult:
+    authResult, err := response.(shared.AuthResultIDPResponse).AuthResult()
+    if err != nil {
+        if errors.Is(err, shared.ErrAuthResultNotFound) {
+            // Handle missing auth result
+        }
+        return err
+    }
+    // Use authResult...
+
+case shared.ResponseTypeAccessToken:
+    accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+    if err != nil {
+        if errors.Is(err, shared.ErrAccessTokenNotFound) {
+            // Handle missing access token
+        }
+        return err
+    }
+    // Use accessToken...
+
+case shared.ResponseTypeRawToken:
+    rawToken, err := response.(shared.RawTokenIDPResponse).RawToken()
+    if err != nil {
+        if errors.Is(err, shared.ErrRawTokenNotFound) {
+            // Handle missing raw token
+        }
+        return err
+    }
+    // Use rawToken...
+}
+```
+
+### Response Types
+
+The library supports three types of identity provider responses:
+
+1. **AuthResult** (`ResponseTypeAuthResult`)
+   - Contains Microsoft Authentication Library AuthResult
+   - Returns `ErrAuthResultNotFound` if not set
+
+2. **AccessToken** (`ResponseTypeAccessToken`)
+   - Contains Azure SDK AccessToken
+   - Returns `ErrAccessTokenNotFound` if not set
+
+3. **RawToken** (`ResponseTypeRawToken`)
+   - Contains raw token string
+   - Returns `ErrRawTokenNotFound` if not set

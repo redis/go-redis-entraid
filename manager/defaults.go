@@ -104,7 +104,10 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 	switch response.Type() {
 	case shared.ResponseTypeAuthResult:
-		authResult := response.(shared.AuthResultIDPResponse).AuthResult()
+		authResult, err := response.(shared.AuthResultIDPResponse).AuthResult()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get auth result: %w", err)
+		}
 		if authResult.ExpiresOn.IsZero() {
 			return nil, fmt.Errorf("auth result expiration time is not set")
 		}
@@ -117,10 +120,19 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		expiresOn = authResult.ExpiresOn.UTC()
 
 	case shared.ResponseTypeRawToken, shared.ResponseTypeAccessToken:
-		tokenStr := response.(shared.RawTokenIDPResponse).RawToken()
-
+		var tokenStr string
+		var err error
+		if response.Type() == shared.ResponseTypeRawToken {
+			tokenStr, err = response.(shared.RawTokenIDPResponse).RawToken()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get raw token: %w", err)
+			}
+		}
 		if response.Type() == shared.ResponseTypeAccessToken {
-			accessToken := response.(shared.AccessTokenIDPResponse).AccessToken()
+			accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get access token: %w", err)
+			}
 			if accessToken.Token == "" {
 				return nil, fmt.Errorf("access token value is empty")
 			}
@@ -139,7 +151,7 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 		// Parse the token to extract claims, but note that signature verification
 		// should be handled by the identity provider
-		_, _, err := jwt.NewParser().ParseUnverified(tokenStr, &claims)
+		_, _, err = jwt.NewParser().ParseUnverified(tokenStr, &claims)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse JWT token: %w", err)
 		}

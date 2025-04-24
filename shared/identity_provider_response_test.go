@@ -22,22 +22,25 @@ func (m *mockIDPResponse) Type() string {
 	return m.responseType
 }
 
-func (m *mockIDPResponse) AuthResult() public.AuthResult {
+func (m *mockIDPResponse) AuthResult() (public.AuthResult, error) {
 	if m.authResult == nil {
-		return public.AuthResult{}
+		return public.AuthResult{}, ErrAuthResultNotFound
 	}
-	return *m.authResult
+	return *m.authResult, nil
 }
 
-func (m *mockIDPResponse) AccessToken() azcore.AccessToken {
+func (m *mockIDPResponse) AccessToken() (azcore.AccessToken, error) {
 	if m.accessToken == nil {
-		return azcore.AccessToken{}
+		return azcore.AccessToken{}, ErrAccessTokenNotFound
 	}
-	return *m.accessToken
+	return *m.accessToken, nil
 }
 
-func (m *mockIDPResponse) RawToken() string {
-	return m.rawToken
+func (m *mockIDPResponse) RawToken() (string, error) {
+	if m.rawToken == "" {
+		return "", ErrRawTokenNotFound
+	}
+	return m.rawToken, nil
 }
 
 type mockIDPParser struct {
@@ -105,7 +108,7 @@ func TestNewIDPResponse(t *testing.T) {
 			name:          "Nil result",
 			responseType:  ResponseTypeAuthResult,
 			result:        nil,
-			expectedError: "result cannot be nil",
+			expectedError: ErrInvalidIDPResponse.Error(),
 		},
 		{
 			name:          "Nil string pointer",
@@ -156,12 +159,24 @@ func TestNewIDPResponse(t *testing.T) {
 
 			switch tt.responseType {
 			case ResponseTypeAuthResult:
-				assert.NotNil(t, resp.(AuthResultIDPResponse).AuthResult())
+				response, ok := resp.(AuthResultIDPResponse)
+				assert.True(t, ok)
+				res, err := response.AuthResult()
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
 			case ResponseTypeAccessToken:
-				assert.NotNil(t, resp.(AccessTokenIDPResponse).AccessToken())
-				assert.NotEmpty(t, resp.(AccessTokenIDPResponse).AccessToken().Token)
+				response, ok := resp.(AccessTokenIDPResponse)
+				assert.True(t, ok)
+				res, err := response.AccessToken()
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
+				assert.NotEmpty(t, res.Token)
 			case ResponseTypeRawToken:
-				assert.NotEmpty(t, resp.(RawTokenIDPResponse).RawToken())
+				response, ok := resp.(RawTokenIDPResponse)
+				assert.True(t, ok)
+				res, err := response.RawToken()
+				assert.NoError(t, err)
+				assert.NotNil(t, res)
 			}
 		})
 	}
@@ -187,50 +202,55 @@ func TestIdentityProviderResponse(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		response     *mockIDPResponse
+		responseType string
+		result       interface{}
 		expectedType string
 	}{
 		{
-			name: "AuthResult response",
-			response: &mockIDPResponse{
-				responseType: ResponseTypeAuthResult,
-				authResult:   authResult,
-			},
+			name:         "AuthResult response",
+			responseType: ResponseTypeAuthResult,
+			result:       authResult,
 			expectedType: ResponseTypeAuthResult,
 		},
 		{
-			name: "AccessToken response",
-			response: &mockIDPResponse{
-				responseType: ResponseTypeAccessToken,
-				accessToken:  accessToken,
-			},
+			name:         "AccessToken response",
+			responseType: ResponseTypeAccessToken,
+			result:       accessToken,
 			expectedType: ResponseTypeAccessToken,
 		},
 		{
-			name: "RawToken response",
-			response: &mockIDPResponse{
-				responseType: ResponseTypeRawToken,
-				rawToken:     "test-raw-token",
-			},
+			name:         "RawToken response",
+			responseType: ResponseTypeRawToken,
+			result:       "test-raw-token",
 			expectedType: ResponseTypeRawToken,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedType, tt.response.Type())
-
+			response, err := NewIDPResponse(tt.responseType, tt.result)
+			assert.NoError(t, err)
 			switch tt.expectedType {
 			case ResponseTypeAuthResult:
-				result := tt.response.AuthResult()
+				typedResponse, ok := response.(AuthResultIDPResponse)
+				assert.True(t, ok)
+				result, err := typedResponse.AuthResult()
+				assert.NoError(t, err)
 				assert.Equal(t, authResult.AccessToken, result.AccessToken)
 				assert.Equal(t, authResult.ExpiresOn, result.ExpiresOn)
 			case ResponseTypeAccessToken:
-				token := tt.response.AccessToken()
+				typedResponse, ok := response.(AccessTokenIDPResponse)
+				assert.True(t, ok)
+				token, err := typedResponse.AccessToken()
+				assert.NoError(t, err)
 				assert.Equal(t, accessToken.Token, token.Token)
 				assert.Equal(t, accessToken.ExpiresOn, token.ExpiresOn)
 			case ResponseTypeRawToken:
-				assert.Equal(t, "test-raw-token", tt.response.RawToken())
+				typedResponse, ok := response.(RawTokenIDPResponse)
+				assert.True(t, ok)
+				rawToken, err := typedResponse.RawToken()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-raw-token", rawToken)
 			}
 		})
 	}
@@ -271,7 +291,14 @@ func TestIdentityProvider(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, response)
 				assert.Equal(t, ResponseTypeRawToken, response.Type())
-				assert.Equal(t, "test-token", response.(RawTokenIDPResponse).RawToken())
+				rawTokenResponse, ok := response.(RawTokenIDPResponse)
+				assert.True(t, ok)
+				assert.NotNil(t, rawTokenResponse)
+				// Check the raw token value
+				rawToken, err := rawTokenResponse.RawToken()
+				assert.NoError(t, err)
+				assert.NotEmpty(t, rawToken)
+				assert.Equal(t, "test-token", rawToken)
 			}
 		})
 	}

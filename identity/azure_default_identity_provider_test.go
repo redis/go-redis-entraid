@@ -56,7 +56,10 @@ func TestAzureDefaultIdentityProvider_RequestToken(t *testing.T) {
 	assert.NotNil(t, resp, "resp should not be nil")
 	assert.NoError(t, err, "failed to request resp")
 	assert.Equal(t, shared.ResponseTypeAccessToken, resp.Type(), "resp type should be access resp")
-	assert.Equal(t, mToken, resp.(shared.AccessTokenIDPResponse).AccessToken(), "access token should be equal to testJWTToken")
+	atoken, err := resp.(shared.AccessTokenIDPResponse).AccessToken()
+	assert.NotNil(t, atoken, "token should not be nil")
+	assert.NoError(t, err, "failed to get token")
+	assert.Equal(t, mToken, atoken, "access resp should be equal to testJWTToken")
 }
 
 func TestAzureDefaultIdentityProvider_RequestTokenWithScopes(t *testing.T) {
@@ -88,7 +91,10 @@ func TestAzureDefaultIdentityProvider_RequestTokenWithScopes(t *testing.T) {
 		assert.NotNil(t, resp, "resp should not be nil")
 		assert.NoError(t, err, "failed to request resp")
 		assert.Equal(t, shared.ResponseTypeAccessToken, resp.Type(), "resp type should be access resp")
-		assert.Equal(t, mToken, resp.(shared.AccessTokenIDPResponse).AccessToken(), "access resp should be equal to testJWTToken")
+		atoken, err := resp.(shared.AccessTokenIDPResponse).AccessToken()
+		assert.NotNil(t, atoken, "token should not be nil")
+		assert.NoError(t, err, "failed to get token")
+		assert.Equal(t, mToken, atoken, "access resp should be equal to testJWTToken")
 	})
 	t.Run("RequestToken with error from credFactory", func(t *testing.T) {
 		// use mockAzureCredential to simulate the environment

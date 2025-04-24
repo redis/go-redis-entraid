@@ -162,20 +162,23 @@ func (a *authResult) Type() string {
 	return a.ResultType
 }
 
-func (a *authResult) AuthResult() public.AuthResult {
+func (a *authResult) AuthResult() (public.AuthResult, error) {
 	if a.AuthResultVal == nil {
-		return public.AuthResult{}
+		return public.AuthResult{}, shared.ErrAuthResultNotFound
 	}
-	return *a.AuthResultVal
+	return *a.AuthResultVal, nil
 }
 
-func (a *authResult) AccessToken() azcore.AccessToken {
+func (a *authResult) AccessToken() (azcore.AccessToken, error) {
 	if a.AccessTokenVal == nil {
-		return azcore.AccessToken{}
+		return azcore.AccessToken{}, shared.ErrAccessTokenNotFound
 	}
-	return *a.AccessTokenVal
+	return *a.AccessTokenVal, nil
 }
 
-func (a *authResult) RawToken() string {
-	return a.RawTokenVal
+func (a *authResult) RawToken() (string, error) {
+	if a.RawTokenVal == "" {
+		return "", shared.ErrRawTokenNotFound
+	}
+	return a.RawTokenVal, nil
 }

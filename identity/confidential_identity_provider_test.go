@@ -268,7 +268,9 @@ func TestConfidentialIdentityProvider_RequestToken(t *testing.T) {
 		}
 		assert.NotEmpty(t, token, "RequestToken() token should not be empty")
 		assert.Equal(t, token.Type(), shared.ResponseTypeAuthResult, "RequestToken() token type should be AuthResult")
-		assert.Equal(t, token.(shared.AuthResultIDPResponse).AuthResult().ExpiresOn, expiresOn, "RequestToken() token expiration should match")
+		res, err := token.(shared.AuthResultIDPResponse).AuthResult()
+		assert.NoError(t, err, "RequestToken() token should be AuthResultIDPResponse")
+		assert.Equal(t, expiresOn, res.ExpiresOn, "RequestToken() token should be equal to expiresOn")
 	})
 	t.Run("with error", func(t *testing.T) {
 		t.Parallel()

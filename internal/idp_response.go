@@ -21,7 +21,7 @@ type IDPResp struct {
 // It validates the input and ensures the response type matches the provided value
 func NewIDPResp(resultType string, result interface{}) (*IDPResp, error) {
 	if result == nil {
-		return nil, fmt.Errorf("result cannot be nil")
+		return nil, ErrInvalidIDPResponse
 	}
 
 	r := &IDPResp{resultType: resultType}
@@ -73,23 +73,26 @@ func (a *IDPResp) Type() string {
 
 // AuthResult returns the AuthResult if present, or an empty AuthResult if not set
 // Use HasAuthResult() to check if the value is actually set
-func (a *IDPResp) AuthResult() public.AuthResult {
+func (a *IDPResp) AuthResult() (public.AuthResult, error) {
 	if a.authResultVal == nil {
-		return public.AuthResult{}
+		return public.AuthResult{}, ErrAuthResultNotFound
 	}
-	return *a.authResultVal
+	return *a.authResultVal, nil
 }
 
 // AccessToken returns the AccessToken if present, or an empty AccessToken if not set
 // Use HasAccessToken() to check if the value is actually set
-func (a *IDPResp) AccessToken() azcore.AccessToken {
+func (a *IDPResp) AccessToken() (azcore.AccessToken, error) {
 	if a.accessTokenVal == nil {
-		return azcore.AccessToken{}
+		return azcore.AccessToken{}, ErrAccessTokenNotFound
 	}
-	return *a.accessTokenVal
+	return *a.accessTokenVal, nil
 }
 
 // RawToken returns the raw token string
-func (a *IDPResp) RawToken() string {
-	return a.rawTokenVal
+func (a *IDPResp) RawToken() (string, error) {
+	if a.rawTokenVal == "" {
+		return "", ErrRawTokenNotFound
+	}
+	return a.rawTokenVal, nil
 }

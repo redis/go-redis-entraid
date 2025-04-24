@@ -329,9 +329,15 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 }
 
 // Stop closes the token manager and releases any resources.
-func (e *entraidTokenManager) Stop() error {
+func (e *entraidTokenManager) Stop() (err error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
+	defer func() {
+		// recover from panic and return the error
+		if r := recover(); r != nil {
+			err = fmt.Errorf("failed to stop token manager: %s", r)
+		}
+	}()
 
 	if e.closedChan == nil || e.listener == nil {
 		return ErrTokenManagerAlreadyStopped
