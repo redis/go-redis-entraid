@@ -15,9 +15,9 @@ import (
 const (
 	DefaultExpirationRefreshRatio        = 0.7
 	DefaultRetryOptionsMaxAttempts       = 3
-	DefaultRetryOptionsInitialDelayMs    = 1000
 	DefaultRetryOptionsBackoffMultiplier = 2.0
-	DefaultRetryOptionsMaxDelayMs        = 10000
+	DefaultRetryOptionsInitialDelay      = 1000 * time.Millisecond
+	DefaultRetryOptionsMaxDelay          = 10000 * time.Millisecond
 )
 
 // defaultIsRetryable is a function that checks if the error is retriable.
@@ -57,14 +57,14 @@ func defaultRetryOptionsOr(retryOptions RetryOptions) RetryOptions {
 	if retryOptions.MaxAttempts <= 0 {
 		retryOptions.MaxAttempts = DefaultRetryOptionsMaxAttempts
 	}
-	if retryOptions.InitialDelayMs == 0 {
-		retryOptions.InitialDelayMs = DefaultRetryOptionsInitialDelayMs
+	if retryOptions.InitialDelay == 0 {
+		retryOptions.InitialDelay = DefaultRetryOptionsInitialDelay
 	}
 	if retryOptions.BackoffMultiplier == 0 {
 		retryOptions.BackoffMultiplier = DefaultRetryOptionsBackoffMultiplier
 	}
-	if retryOptions.MaxDelayMs == 0 {
-		retryOptions.MaxDelayMs = DefaultRetryOptionsMaxDelayMs
+	if retryOptions.MaxDelay == 0 {
+		retryOptions.MaxDelay = DefaultRetryOptionsMaxDelay
 	}
 	return retryOptions
 }
@@ -74,7 +74,7 @@ func defaultRetryOptionsOr(retryOptions RetryOptions) RetryOptions {
 // The default token parser is used to parse the raw token and return a Token object.
 func defaultIdentityProviderResponseParserOr(idpResponseParser shared.IdentityProviderResponseParser) shared.IdentityProviderResponseParser {
 	if idpResponseParser == nil {
-		return &defaultIdentityProviderResponseParser{}
+		return entraidIdentityProviderResponseParser
 	}
 	return idpResponseParser
 }
@@ -104,7 +104,10 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 	switch response.Type() {
 	case shared.ResponseTypeAuthResult:
-		authResult := response.AuthResult()
+		authResult, err := response.(shared.AuthResultIDPResponse).AuthResult()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get auth result: %w", err)
+		}
 		if authResult.ExpiresOn.IsZero() {
 			return nil, fmt.Errorf("auth result expiration time is not set")
 		}
@@ -117,10 +120,19 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		expiresOn = authResult.ExpiresOn.UTC()
 
 	case shared.ResponseTypeRawToken, shared.ResponseTypeAccessToken:
-		tokenStr := response.RawToken()
-
+		var tokenStr string
+		var err error
+		if response.Type() == shared.ResponseTypeRawToken {
+			tokenStr, err = response.(shared.RawTokenIDPResponse).RawToken()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get raw token: %w", err)
+			}
+		}
 		if response.Type() == shared.ResponseTypeAccessToken {
-			accessToken := response.AccessToken()
+			accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get access token: %w", err)
+			}
 			if accessToken.Token == "" {
 				return nil, fmt.Errorf("access token value is empty")
 			}
@@ -139,7 +151,7 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 		// Parse the token to extract claims, but note that signature verification
 		// should be handled by the identity provider
-		_, _, err := jwt.NewParser().ParseUnverified(tokenStr, &claims)
+		_, _, err = jwt.NewParser().ParseUnverified(tokenStr, &claims)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse JWT token: %w", err)
 		}

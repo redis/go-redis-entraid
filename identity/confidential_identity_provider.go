@@ -124,8 +124,8 @@ func NewConfidentialIdentityProvider(opts ConfidentialIdentityProviderOptions) (
 		}
 	case ClientCertificateCredentialType:
 		// ClientCertificateCredentialType is the type of credentials that uses a client certificate to authenticate.
-		if opts.ClientCert == nil {
-			return nil, fmt.Errorf("client certificate is required when using client certificate credentials")
+		if len(opts.ClientCert) == 0 {
+			return nil, fmt.Errorf("non-empty client certificate is required when using client certificate credentials")
 		}
 		if opts.ClientPrivateKey == nil {
 			return nil, fmt.Errorf("client private key is required when using client certificate credentials")
@@ -155,12 +155,12 @@ func NewConfidentialIdentityProvider(opts ConfidentialIdentityProviderOptions) (
 
 // RequestToken requests a token from the identity provider.
 // It returns the identity provider response, including the auth result.
-func (c *ConfidentialIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+func (c *ConfidentialIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("client is not initialized")
 	}
 
-	result, err := c.client.AcquireTokenByCredential(context.TODO(), c.scopes)
+	result, err := c.client.AcquireTokenByCredential(ctx, c.scopes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire token: %w", err)
 	}

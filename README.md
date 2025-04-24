@@ -10,6 +10,7 @@ Entra ID extension for go-redis
 - [Examples](#examples)
 - [Testing](#testing)
 - [FAQ](#faq)
+- [Error Handling](#error-handling)
 
 ## Introduction
 
@@ -229,15 +230,18 @@ type TokenManagerOptions struct {
     // Default: 0.7 (refresh at 70% of token lifetime)
     ExpirationRefreshRatio float64
 
-    // Optional: Minimum time before expiration to refresh (ms)
-    // Default: 10000 (10 seconds)
-    LowerRefreshBoundMs int64
+    // Optional: Minimum time before expiration to trigger refresh
+    // Default: 0 (no lower bound, refresh based on ExpirationRefreshRatio)
+    LowerRefreshBound time.Duration
+
+    // Optional: Custom response parser
+    IdentityProviderResponseParser shared.IdentityProviderResponseParser
 
     // Optional: Configuration for retry behavior
     RetryOptions RetryOptions
 
-    // Optional: Custom response parser
-    IdentityProviderResponseParser IdentityProviderResponseParser
+    // Optional: Timeout for token requests
+    RequestTimeout time.Duration
 }
 ```
 
@@ -245,24 +249,25 @@ type TokenManagerOptions struct {
 Options for retry behavior:
 ```go
 type RetryOptions struct {
+    // Optional: Function to determine if an error is retryable
+    // Default: Checks for network errors and timeouts
+    IsRetryable func(err error) bool
+
     // Optional: Maximum number of retry attempts
     // Default: 3
     MaxAttempts int
 
-    // Optional: Initial delay between retries (ms)
-    // Default: 1000 (1 second)
-    InitialDelayMs int64
+    // Optional: Initial delay between retries
+    // Default: 1 second
+    InitialDelay time.Duration
 
-    // Optional: Maximum delay between retries (ms)
-    // Default: 30000 (30 seconds)
-    MaxDelayMs int64
+    // Optional: Maximum delay between retries
+    // Default: 10 seconds
+    MaxDelay time.Duration
 
     // Optional: Multiplier for exponential backoff
     // Default: 2.0
     BackoffMultiplier float64
-
-    // Optional: Custom retry predicate
-    IsRetryable func(error) bool
 }
 ```
 
@@ -350,7 +355,7 @@ options := entraid.CredentialsProviderOptions{
     ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs: 10000,
+        LowerRefreshBounds: 10000,
     },
 }
 ```
@@ -361,11 +366,11 @@ options := entraid.CredentialsProviderOptions{
     ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs: 10000,
+        LowerRefreshBounds: 10000,
         RetryOptions: manager.RetryOptions{
             MaxAttempts: 3,
-            InitialDelayMs: 1000,
-            MaxDelayMs: 30000,
+            InitialDelay: 1000 * time.Millisecond,
+            MaxDelay: 30000 * time.Millisecond,
             BackoffMultiplier: 2.0,
             IsRetryable: func(err error) bool {
                 return strings.Contains(err.Error(), "network error") ||
@@ -475,6 +480,7 @@ import (
     "fmt"
     "log"
     "os"
+    "strings"
     "time"
 
     "github.com/redis-developer/go-redis-entraid/entraid"
@@ -493,14 +499,14 @@ type CustomIdentityProvider struct {
 }
 
 // RequestToken implements the IdentityProvider interface
-func (p *CustomIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+func (p *CustomIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
     // Implement your custom token retrieval logic here
     // This could be calling your own auth service, using a different auth protocol, etc.
     
     // For this example, we'll simulate getting a JWT token
     token := "your.jwt.token"
     
-    // Create a response using NewIDPResponse with RawToken type
+    // Create a response using NewIDPResponse
     return shared.NewIDPResponse(shared.ResponseTypeRawToken, token)
 }
 
@@ -516,7 +522,18 @@ func main() {
     tokenManager, err := manager.NewTokenManager(customProvider, manager.TokenManagerOptions{
         // Configure token refresh behavior
         ExpirationRefreshRatio: 0.7,
-        LowerRefreshBoundMs:   10000,
+        LowerRefreshBound:     time.Second * 10,
+        RetryOptions: manager.RetryOptions{
+            MaxAttempts:        3,
+            InitialDelay:       time.Second,
+            MaxDelay:          time.Second * 10,
+            BackoffMultiplier: 2.0,
+            IsRetryable: func(err error) bool {
+                return strings.Contains(err.Error(), "network error") ||
+                    strings.Contains(err.Error(), "timeout")
+            },
+        },
+        RequestTimeout: time.Second * 30,
     })
     if err != nil {
         log.Fatalf("Failed to create token manager: %v", err)
@@ -561,6 +578,7 @@ Key points about this implementation:
    - Uses our `TokenManager` for automatic token refresh
    - Benefits from our retry mechanisms
    - Handles token caching and lifecycle
+   - Configurable refresh timing and retry behavior
 
 3. **Streaming Credentials**:
    - Uses our `StreamingCredentialsProvider` for Redis integration
@@ -590,12 +608,23 @@ func TestManagedIdentityProvider(t *testing.T) {
     }
 
     // Test token retrieval
-    token, err := provider.GetToken(context.Background())
+    response, err := provider.RequestToken(context.Background())
     if err != nil {
         t.Fatalf("Failed to get token: %v", err)
     }
-    if token == "" {
-        t.Error("Expected non-empty token")
+
+    // Check response type and get token
+    switch response.Type() {
+    case shared.ResponseTypeRawToken:
+        token, err := response.(shared.RawTokenIDPResponse).RawToken()
+        if err != nil {
+            t.Fatalf("Failed to get raw token: %v", err)
+        }
+        if token == "" {
+            t.Error("Expected non-empty token")
+        }
+    default:
+        t.Errorf("Unexpected response type: %s", response.Type())
     }
 }
 ```
@@ -631,7 +660,159 @@ func TestRedisConnection(t *testing.T) {
 ## FAQ
 
 ### Q: How do I handle token expiration?
-A: The library handles token expiration automatically. Tokens are refreshed when they reach 70% of their lifetime (configurable via `ExpirationRefreshRatio`). You can customize this behavior using `TokenManagerOptions`.
+A: The library handles token expiration automatically. Tokens are refreshed when they reach 70% of their lifetime (configurable via `ExpirationRefreshRatio`). You can also set a minimum time before expiration to trigger refresh using `LowerRefreshBound`. The token manager will automatically handle token refresh and caching.
+
+### Q: How do I handle connection failures?
+A: The library includes built-in retry mechanisms in the TokenManager. You can configure retry behavior using `RetryOptions`:
+```go
+RetryOptions: manager.RetryOptions{
+    MaxAttempts:        3,
+    InitialDelay:       time.Second,
+    MaxDelay:          time.Second * 10,
+    BackoffMultiplier: 2.0,
+    IsRetryable: func(err error) bool {
+        return strings.Contains(err.Error(), "network error") ||
+            strings.Contains(err.Error(), "timeout")
+    },
+}
+```
+
+### Q: What happens if token refresh fails?
+A: The library will retry according to the configured `RetryOptions`. If all retries fail, the error will be propagated to the client. You can customize the retry behavior by:
+1. Setting the maximum number of attempts
+2. Configuring the initial and maximum delay between retries using `time.Duration` values
+3. Setting the backoff multiplier for exponential backoff
+4. Providing a custom function to determine which errors are retryable
+
+### Q: How do I implement custom authentication?
+A: You can create a custom identity provider by implementing the `IdentityProvider` interface:
+```go
+type IdentityProvider interface {
+    // RequestToken requests a token from the identity provider.
+    // The context is passed to the request to allow for cancellation and timeouts.
+    // It returns the token, the expiration time, and an error if any.
+    RequestToken(ctx context.Context) (IdentityProviderResponse, error)
+}
+```
+
+The response types are defined as constants:
+```go
+const (
+    // ResponseTypeAuthResult is the type of the auth result.
+    ResponseTypeAuthResult = "AuthResult"
+    // ResponseTypeAccessToken is the type of the access token.
+    ResponseTypeAccessToken = "AccessToken"
+    // ResponseTypeRawToken is the type of the response when you have a raw string.
+    ResponseTypeRawToken = "RawToken"
+)
+```
+
+The `IdentityProviderResponse` interface and related interfaces provide methods to access the authentication result:
+```go
+// IdentityProviderResponse is the base interface that defines the type method
+type IdentityProviderResponse interface {
+    // Type returns the type of identity provider response
+    Type() string
+}
+
+// AuthResultIDPResponse defines the method for getting the auth result
+type AuthResultIDPResponse interface {
+    // AuthResult returns the Microsoft Authentication Library AuthResult.
+    // Returns ErrAuthResultNotFound if the auth result is not set.
+    AuthResult() (public.AuthResult, error)
+}
+
+// AccessTokenIDPResponse defines the method for getting the access token
+type AccessTokenIDPResponse interface {
+    // AccessToken returns the Azure SDK AccessToken.
+    // Returns ErrAccessTokenNotFound if the access token is not set.
+    AccessToken() (azcore.AccessToken, error)
+}
+
+// RawTokenIDPResponse defines the method for getting the raw token
+type RawTokenIDPResponse interface {
+    // RawToken returns the raw token string.
+    // Returns ErrRawTokenNotFound if the raw token is not set.
+    RawToken() (string, error)
+}
+```
+
+You can create a new response using the `NewIDPResponse` function:
+```go
+// NewIDPResponse creates a new auth result based on the type provided.
+// Type can be either AuthResult, AccessToken, or RawToken.
+// Second argument is the result of the type provided in the first argument.
+func NewIDPResponse(responseType string, result interface{}) (IdentityProviderResponse, error)
+```
+
+Here's an example of how to use these types in a custom identity provider:
+```go
+type CustomIdentityProvider struct {
+    tokenEndpoint string
+    clientID      string
+    clientSecret  string
+}
+
+func (p *CustomIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
+    // Get the token from your custom auth service
+    token, err := p.getTokenFromCustomService()
+    if err != nil {
+        return nil, err
+    }
+
+    // Create a response based on the token type
+    switch token.Type {
+    case "jwt":
+        return shared.NewIDPResponse(shared.ResponseTypeRawToken, token.Value)
+    case "access_token":
+        return shared.NewIDPResponse(shared.ResponseTypeAccessToken, token.Value)
+    case "auth_result":
+        return shared.NewIDPResponse(shared.ResponseTypeAuthResult, token.Value)
+    default:
+        return nil, fmt.Errorf("unsupported token type: %s", token.Type)
+    }
+}
+
+// Example usage:
+func main() {
+    provider := &CustomIdentityProvider{
+        tokenEndpoint: "https://your-auth-endpoint.com/token",
+        clientID:      os.Getenv("CUSTOM_CLIENT_ID"),
+        clientSecret:  os.Getenv("CUSTOM_CLIENT_SECRET"),
+    }
+
+    response, err := provider.RequestToken(context.Background())
+    if err != nil {
+        log.Fatalf("Failed to get token: %v", err)
+    }
+
+    switch response.Type() {
+    case shared.ResponseTypeRawToken:
+        token, err := response.(shared.RawTokenIDPResponse).RawToken()
+        if err != nil {
+            log.Fatalf("Failed to get raw token: %v", err)
+        }
+        log.Printf("Got raw token: %s", token)
+
+    case shared.ResponseTypeAccessToken:
+        token, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+        if err != nil {
+            log.Fatalf("Failed to get access token: %v", err)
+        }
+        log.Printf("Got access token: %s", token.Token)
+
+    case shared.ResponseTypeAuthResult:
+        result, err := response.(shared.AuthResultIDPResponse).AuthResult()
+        if err != nil {
+            log.Fatalf("Failed to get auth result: %v", err)
+        }
+        log.Printf("Got auth result: %s", result.AccessToken)
+    }
+}
+```
+
+### Q: Can I customize how token responses are parsed?
+A: Yes, you can provide a custom `IdentityProviderResponseParser` in the `TokenManagerOptions`. This allows you to handle custom token formats or implement special parsing logic.
 
 ### Q: What's the difference between managed identity types?
 A: There are three main types of managed identities in Azure:
@@ -666,55 +847,92 @@ The choice between these types depends on your specific use case:
 - Use User Assigned for shared identity scenarios
 - Use Default Azure Identity for development and testing
 
-### Q: How do I handle connection failures?
-A: The library includes built-in retry mechanisms in the TokenManager. You can configure retry behavior using `RetryOptions`:
+## Error Handling
+
+### Available Errors
+
+The library provides several error types that you can check against:
+
 ```go
-RetryOptions: manager.RetryOptions{
-    MaxAttempts: 3,
-    InitialDelayMs: 1000,
-    MaxDelayMs: 30000,
-    BackoffMultiplier: 2.0,
+// Import the shared package to access error types
+import "github.com/redis-developer/go-redis-entraid/shared"
+
+// Available error types:
+var (
+    // ErrInvalidIDPResponse is returned when the response from the identity provider is invalid
+    ErrInvalidIDPResponse = shared.ErrInvalidIDPResponse
+
+    // ErrInvalidIDPResponseType is returned when the response type is not supported
+    ErrInvalidIDPResponseType = shared.ErrInvalidIDPResponseType
+
+    // ErrAuthResultNotFound is returned when trying to get an AuthResult that is not set
+    ErrAuthResultNotFound = shared.ErrAuthResultNotFound
+
+    // ErrAccessTokenNotFound is returned when trying to get an AccessToken that is not set
+    ErrAccessTokenNotFound = shared.ErrAccessTokenNotFound
+
+    // ErrRawTokenNotFound is returned when trying to get a RawToken that is not set
+    ErrRawTokenNotFound = shared.ErrRawTokenNotFound
+)
+```
+
+### Error Handling Example
+
+Here's how to handle errors when working with identity provider responses:
+
+```go
+// Example of handling different response types and their errors
+response, err := identityProvider.RequestToken(ctx)
+if err != nil {
+    // Handle request error
+    return err
+}
+
+switch response.Type() {
+case shared.ResponseTypeAuthResult:
+    authResult, err := response.(shared.AuthResultIDPResponse).AuthResult()
+    if err != nil {
+        if errors.Is(err, shared.ErrAuthResultNotFound) {
+            // Handle missing auth result
+        }
+        return err
+    }
+    // Use authResult...
+
+case shared.ResponseTypeAccessToken:
+    accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
+    if err != nil {
+        if errors.Is(err, shared.ErrAccessTokenNotFound) {
+            // Handle missing access token
+        }
+        return err
+    }
+    // Use accessToken...
+
+case shared.ResponseTypeRawToken:
+    rawToken, err := response.(shared.RawTokenIDPResponse).RawToken()
+    if err != nil {
+        if errors.Is(err, shared.ErrRawTokenNotFound) {
+            // Handle missing raw token
+        }
+        return err
+    }
+    // Use rawToken...
 }
 ```
 
-### Q: Does this work with Redis Cluster?
-A: Yes, the library works with both standalone Redis and Redis Cluster. Use the appropriate Redis client constructor:
-```go
-// For standalone Redis
-client := redis.NewClient(&redis.Options{
-    Addr: "your-endpoint:6380",
-    StreamingCredentialsProvider: provider,
-})
+### Response Types
 
-// For Redis Cluster
-client := redis.NewClusterClient(&redis.ClusterOptions{
-    Addrs: []string{"your-endpoint:6380"},
-    StreamingCredentialsProvider: provider,
-})
-```
+The library supports three types of identity provider responses:
 
-### Q: How do I implement custom authentication?
-A: You can create a custom identity provider by implementing the `IdentityProvider` interface:
-```go
-// IdentityProviderResponse is an interface that defines the methods for an identity provider authentication result.
-// It is used to get the type of the authentication result, the authentication result itself (can be AuthResult or AccessToken),
-type IdentityProviderResponse interface {
-	// Type returns the type of the auth result
-	Type() string
-	AuthResult() public.AuthResult
-	AccessToken() azcore.AccessToken
-	RawToken() string
-}
+1. **AuthResult** (`ResponseTypeAuthResult`)
+   - Contains Microsoft Authentication Library AuthResult
+   - Returns `ErrAuthResultNotFound` if not set
 
-// IdentityProvider is an interface that defines the methods for an identity provider.
-// It is used to request a token for authentication.
-// The identity provider is responsible for providing the raw authentication token.
-type IdentityProvider interface {
-	// RequestToken requests a token from the identity provider.
-	// It returns the token, the expiration time, and an error if any.
-	RequestToken() (IdentityProviderResponse, error)
-}
-```
+2. **AccessToken** (`ResponseTypeAccessToken`)
+   - Contains Azure SDK AccessToken
+   - Returns `ErrAccessTokenNotFound` if not set
 
-### Q: What happens if token refresh fails?
-A: The library will retry according to the configured `RetryOptions`. If all retries fail, the error will be propagated to the client.
+3. **RawToken** (`ResponseTypeRawToken`)
+   - Contains raw token string
+   - Returns `ErrRawTokenNotFound` if not set

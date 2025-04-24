@@ -1,6 +1,7 @@
 package token
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,51 +10,71 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	expiration := time.Now().Add(1 * time.Hour)
+	receivedAt := time.Now()
+	ttl := expiration.Unix() - receivedAt.Unix()
+	token := New("username", "password", "rawToken", expiration, receivedAt, ttl)
 	assert.Equal(t, "username", token.username)
 	assert.Equal(t, "password", token.password)
 	assert.Equal(t, "rawToken", token.rawToken)
-	assert.Equal(t, int64(3600), token.ttl)
+	assert.Equal(t, expiration, token.expiresOn)
+	assert.Equal(t, receivedAt, token.receivedAt)
+	assert.Equal(t, ttl, token.ttl)
 }
 
 func TestBasicAuth(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	username, password := token.BasicAuth()
-	assert.Equal(t, "username", username)
-	assert.Equal(t, "password", password)
+	username := "username12"
+	password := "password32"
+	rawToken := fmt.Sprintf("%s:%s", username, password)
+	expiration := time.Now().Add(1 * time.Hour)
+	receivedAt := time.Now()
+	ttl := expiration.Unix() - receivedAt.Unix()
+	token := New(username, password, rawToken, expiration, receivedAt, ttl)
+	baUsername, baPassword := token.BasicAuth()
+	assert.Equal(t, username, baUsername)
+	assert.Equal(t, password, baPassword)
 }
 
 func TestRawCredentials(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	username := "username12"
+	password := "password32"
+	rawToken := fmt.Sprintf("%s:%s", username, password)
+	expiration := time.Now().Add(1 * time.Hour)
+	receivedAt := time.Now()
+	ttl := expiration.Unix() - receivedAt.Unix()
+	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	rawCredentials := token.RawCredentials()
-	assert.Equal(t, "rawToken", rawCredentials)
+	assert.Equal(t, rawToken, rawCredentials)
+	assert.Contains(t, rawCredentials, username)
+	assert.Contains(t, rawCredentials, password)
 }
 
 func TestExpirationOn(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now().Add(1*time.Hour), time.Now(), 3600)
+	username := "username12"
+	password := "password32"
+	rawToken := fmt.Sprintf("%s:%s", username, password)
+	expiration := time.Now().Add(1 * time.Hour)
+	receivedAt := time.Now()
+	ttl := expiration.Unix() - receivedAt.Unix()
+	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	expirationOn := token.ExpirationOn()
 	assert.True(t, expirationOn.After(time.Now()))
-}
-
-func TestTokenExpiration(t *testing.T) {
-	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now().Add(1*time.Hour), time.Now(), 3600)
-	assert.True(t, token.ExpirationOn().After(time.Now()))
-
-	token.expiresOn = time.Now().Add(-1 * time.Hour)
-	assert.False(t, token.ExpirationOn().After(time.Now()))
+	assert.Equal(t, expiration, expirationOn)
 }
 
 func TestTokenTTL(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	assert.Equal(t, int64(3600), token.ttl)
-
-	token.ttl = 7200
-	assert.Equal(t, int64(7200), token.ttl)
+	username := "username12"
+	password := "password32"
+	rawToken := fmt.Sprintf("%s:%s", username, password)
+	expiration := time.Now().Add(1 * time.Hour)
+	receivedAt := time.Now()
+	ttl := expiration.Unix() - receivedAt.Unix()
+	token := New(username, password, rawToken, expiration, receivedAt, ttl)
+	assert.Equal(t, ttl, token.TTL())
 }
 
 func TestCopyToken(t *testing.T) {
@@ -81,28 +102,6 @@ func TestCopyToken(t *testing.T) {
 	anotherCopy := copiedToken.Copy()
 	anotherCopy.rawToken = "changed"
 	assert.NotEqual(t, copiedToken, anotherCopy)
-}
-
-func TestTokenCompare(t *testing.T) {
-	t.Parallel()
-	// Create two tokens with the same credentials
-	token1 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	token2 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	assert.True(t, token1.compareCredentials(token2))
-	assert.True(t, token1.compareRawCredentials(token2))
-	assert.True(t, token1.compareToken(token2))
-
-	// Create two tokens with different credentials and different raw credentials
-	token3 := New("username", "differentPassword", "differentRawToken", time.Now(), time.Now(), 3600)
-	assert.False(t, token1.compareCredentials(token3))
-	assert.False(t, token1.compareRawCredentials(token3))
-	assert.False(t, token1.compareToken(token3))
-
-	// Create token with same credentials but different rawCredentials
-	token4 := New("username", "password", "differentRawToken", time.Now(), time.Now(), 3600)
-	assert.False(t, token1.compareRawCredentials(token4))
-	assert.False(t, token1.compareToken(token4))
-	assert.True(t, token1.compareCredentials(token4))
 }
 
 func TestTokenReceivedAt(t *testing.T) {
@@ -163,32 +162,5 @@ func BenchmarkCopyToken(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		token.Copy()
-	}
-}
-
-func BenchmarkCompareCredentials(b *testing.B) {
-	token1 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	token2 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		token1.compareCredentials(token2)
-	}
-}
-
-func BenchmarkCompareRawCredentials(b *testing.B) {
-	token1 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	token2 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		token1.compareRawCredentials(token2)
-	}
-}
-
-func BenchmarkCompareToken(b *testing.B) {
-	token1 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	token2 := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		token1.compareToken(token2)
 	}
 }

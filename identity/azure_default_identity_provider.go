@@ -58,7 +58,7 @@ func NewDefaultAzureIdentityProvider(opts DefaultAzureIdentityProviderOptions) (
 
 // RequestToken requests a token from the Azure Default Identity provider.
 // It returns the token, the expiration time, and an error if any.
-func (a *DefaultAzureIdentityProvider) RequestToken() (shared.IdentityProviderResponse, error) {
+func (a *DefaultAzureIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
 	credFactory := a.credFactory
 	if credFactory == nil {
 		credFactory = &defaultCredFactory{}
@@ -68,7 +68,7 @@ func (a *DefaultAzureIdentityProvider) RequestToken() (shared.IdentityProviderRe
 		return nil, fmt.Errorf("failed to create default azure credential: %w", err)
 	}
 
-	token, err := cred.GetToken(context.TODO(), policy.TokenRequestOptions{Scopes: a.scopes})
+	token, err := cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: a.scopes})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}

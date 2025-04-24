@@ -26,7 +26,7 @@ func TestOnTokenNext(t *testing.T) {
 	now := time.Now()
 	testToken := token.New("test-user", "test-pass", "test-token", now.Add(time.Hour), now, 3600)
 
-	listener.OnTokenNext(testToken)
+	listener.OnNext(testToken)
 
 	// Since we can't directly access the internal state of entraidCredentialsProvider,
 	// we'll verify that the listener was created and the call didn't panic
@@ -38,7 +38,7 @@ func TestOnTokenError(t *testing.T) {
 	listener := tokenListenerFromCP(cp)
 
 	testError := errors.New("test error")
-	listener.OnTokenError(testError)
+	listener.OnError(testError)
 
 	// Since we can't directly access the internal state of entraidCredentialsProvider,
 	// we'll verify that the listener was created and the call didn't panic

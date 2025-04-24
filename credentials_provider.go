@@ -19,8 +19,8 @@ var _ auth.StreamingCredentialsProvider = (*entraidCredentialsProvider)(nil)
 type entraidCredentialsProvider struct {
 	options CredentialsProviderOptions // Configuration options for the provider.
 
-	tokenManager      manager.TokenManager // Manages token retrieval.
-	closeTokenManager manager.CloseFunc    // Function to cancel the token manager.
+	tokenManager     manager.TokenManager // Manages token retrieval.
+	stopTokenManager manager.StopFunc     // Function to stop the token manager.
 
 	// listeners is a slice of listeners that are notified when the token manager receives a new token.
 	listeners []auth.CredentialsListener // Slice of listeners notified on token updates.
@@ -64,7 +64,7 @@ func (e *entraidCredentialsProvider) onTokenError(err error) {
 // - error: An error if the subscription fails, such as if the token cannot be retrieved.
 //
 // Note: If the listener is already subscribed, it will not receive duplicate notifications.
-func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener) (auth.Credentials, auth.CancelProviderFunc, error) {
+func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener) (auth.Credentials, auth.UnsubscribeFunc, error) {
 	// First try to get a token, only then subscribe the listener.
 	token, err := e.tokenManager.GetToken(false)
 	if err != nil {
@@ -87,7 +87,7 @@ func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener
 	}
 	e.rwLock.Unlock()
 
-	cancel := func() error {
+	unsub := func() error {
 		// Remove the listener from the list of listeners.
 		e.rwLock.Lock()
 		defer e.rwLock.Unlock()
@@ -102,20 +102,20 @@ func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener
 		// Clear the listeners slice if it's empty
 		if len(e.listeners) == 0 {
 			e.listeners = make([]auth.CredentialsListener, 0)
-			if e.closeTokenManager != nil {
-				err := e.closeTokenManager()
+			if e.stopTokenManager != nil {
+				err := e.stopTokenManager()
 				if err != nil {
 					return fmt.Errorf("couldn't cancel token manager: %w", err)
 				}
-				// Set the cancelTokenManager to nil to indicate that it has been canceled.
-				// This prevents multiple calls to cancelTokenManager.
-				e.closeTokenManager = nil
+				// Set the stopTokenManager to nil to indicate that it has been stopped.
+				// This prevents multiple calls to stopTokenManager.
+				e.stopTokenManager = nil
 			}
 		}
 		return nil
 	}
 
-	return token, cancel, nil
+	return token, unsub, nil
 }
 
 // NewCredentialsProvider creates a new credentials provider with the specified token manager and options.
@@ -134,10 +134,10 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		options:      options,
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
-	cancelTokenManager, err := cp.tokenManager.Start(tokenListenerFromCP(cp))
+	stopTM, err := cp.tokenManager.Start(tokenListenerFromCP(cp))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't start token manager: %w", err)
 	}
-	cp.closeTokenManager = cancelTokenManager
+	cp.stopTokenManager = stopTM
 	return cp, nil
 }

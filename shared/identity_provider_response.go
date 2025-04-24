@@ -1,6 +1,8 @@
 package shared
 
 import (
+	"context"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 	"github.com/redis-developer/go-redis-entraid/internal"
@@ -16,6 +18,12 @@ const (
 	ResponseTypeRawToken = "RawToken"
 )
 
+var ErrInvalidIDPResponse = internal.ErrInvalidIDPResponse
+var ErrInvalidIDPResponseType = internal.ErrInvalidIDPResponseType
+var ErrAuthResultNotFound = internal.ErrAuthResultNotFound
+var ErrAccessTokenNotFound = internal.ErrAccessTokenNotFound
+var ErrRawTokenNotFound = internal.ErrRawTokenNotFound
+
 // IdentityProviderResponseParser is an interface that defines the methods for parsing the identity provider response.
 // It is used to parse the response from the identity provider and extract the token.
 // If not provided, the default implementation will be used.
@@ -23,23 +31,58 @@ type IdentityProviderResponseParser interface {
 	ParseResponse(response IdentityProviderResponse) (*token.Token, error)
 }
 
-// IdentityProviderResponse is an interface that defines the methods for an identity provider authentication result.
-// It is used to get the type of the authentication result, the authentication result itself (can be AuthResult or AccessToken),
+// IdentityProviderResponse is an interface that defines the
+// type method for the identity provider response. It is used to
+// identify the type of response returned by the identity provider.
+// The type can be either AuthResult, AccessToken, or RawToken. You can
+// use this interface to check the type of the response and handle it accordingly.
+// Available response types are:
+// - ResponseTypeAuthResult: For Microsoft Authentication Library AuthResult
+// - ResponseTypeAccessToken: For Azure SDK AccessToken
+// - ResponseTypeRawToken: For raw token strings
 type IdentityProviderResponse interface {
-	// Type returns the type of the auth result
+	// Type returns the type of identity provider response
 	Type() string
-	AuthResult() public.AuthResult
-	AccessToken() azcore.AccessToken
-	RawToken() string
+}
+
+// AuthResultIDPResponse is an interface that defines the method for getting the auth result.
+// Returns ErrAuthResultNotFound if the auth result is not set.
+type AuthResultIDPResponse interface {
+	// AuthResult returns the Microsoft Authentication Library AuthResult.
+	// Returns ErrAuthResultNotFound if the auth result is not set.
+	AuthResult() (public.AuthResult, error)
+}
+
+// AccessTokenIDPResponse is an interface that defines the method for getting the access token.
+// Returns ErrAccessTokenNotFound if the access token is not set.
+type AccessTokenIDPResponse interface {
+	// AccessToken returns the Azure SDK AccessToken.
+	// Returns ErrAccessTokenNotFound if the access token is not set.
+	AccessToken() (azcore.AccessToken, error)
+}
+
+// RawTokenIDPResponse is an interface that defines the method for getting the raw token.
+// Returns ErrRawTokenNotFound if the raw token is not set.
+type RawTokenIDPResponse interface {
+	// RawToken returns the raw token string.
+	// Returns ErrRawTokenNotFound if the raw token is not set.
+	RawToken() (string, error)
 }
 
 // IdentityProvider is an interface that defines the methods for an identity provider.
 // It is used to request a token for authentication.
 // The identity provider is responsible for providing the raw authentication token.
+// Available errors:
+// - ErrInvalidIDPResponse: When the response from the identity provider is invalid
+// - ErrInvalidIDPResponseType: When the response type is not supported
+// - ErrAuthResultNotFound: When trying to get an AuthResult that is not set
+// - ErrAccessTokenNotFound: When trying to get an AccessToken that is not set
+// - ErrRawTokenNotFound: When trying to get a RawToken that is not set
 type IdentityProvider interface {
 	// RequestToken requests a token from the identity provider.
+	// The context is passed to the request to allow for cancellation and timeouts.
 	// It returns the token, the expiration time, and an error if any.
-	RequestToken() (IdentityProviderResponse, error)
+	RequestToken(ctx context.Context) (IdentityProviderResponse, error)
 }
 
 // NewIDPResponse creates a new auth result based on the type provided.

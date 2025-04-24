@@ -54,7 +54,7 @@ func (m *fakeTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
 	return m.token, m.err
 }
 
-func (m *fakeTokenManager) Start(listener manager.TokenListener) (manager.CloseFunc, error) {
+func (m *fakeTokenManager) Start(listener manager.TokenListener) (manager.StopFunc, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -65,10 +65,10 @@ func (m *fakeTokenManager) Start(listener manager.TokenListener) (manager.CloseF
 			case <-time.After(tokenExpiration):
 				m.lock.Lock()
 				if m.err != nil {
-					listener.OnTokenError(m.err)
+					listener.OnError(m.err)
 					return
 				}
-				listener.OnTokenNext(m.token)
+				listener.OnNext(m.token)
 				m.lock.Unlock()
 			case <-done:
 				// Exit the loop if done channel is closed
@@ -84,7 +84,7 @@ func (m *fakeTokenManager) Start(listener manager.TokenListener) (manager.CloseF
 	}, nil
 }
 
-func (m *fakeTokenManager) Close() error {
+func (m *fakeTokenManager) Stop() error {
 	return nil
 }
 
@@ -147,7 +147,7 @@ func (m *mockTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
 	return args.Get(0).(*token.Token), args.Error(1)
 }
 
-func (m *mockTokenManager) Start(listener manager.TokenListener) (manager.CloseFunc, error) {
+func (m *mockTokenManager) Start(listener manager.TokenListener) (manager.StopFunc, error) {
 	args := m.Called(listener)
 	m.lock.Lock()
 	if m.done == nil {
@@ -161,13 +161,13 @@ func (m *mockTokenManager) Start(listener manager.TokenListener) (manager.CloseF
 		m.listener = listener
 	}
 	m.lock.Unlock()
-	return args.Get(0).(manager.CloseFunc), args.Error(1)
+	return args.Get(0).(manager.StopFunc), args.Error(1)
 }
-func (m *mockTokenManager) Close() error {
+func (m *mockTokenManager) Stop() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.listener == nil {
-		return manager.ErrTokenManagerAlreadyClosed
+		return manager.ErrTokenManagerAlreadyStopped
 	}
 	if m.listener != nil {
 		m.listener = nil
@@ -200,9 +200,9 @@ func mockTokenManagerLoop(mtm *mockTokenManager, tokenExpiration time.Duration, 
 				case <-time.After(tokenExpiration):
 					mtm.lock.Lock()
 					if err != nil {
-						mtm.listener.OnTokenError(err)
+						mtm.listener.OnError(err)
 					} else {
-						mtm.listener.OnTokenNext(testToken)
+						mtm.listener.OnNext(testToken)
 					}
 					mtm.lock.Unlock()
 				}

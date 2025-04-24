@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"testing"
@@ -39,7 +40,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:                "client-id",
 			CredentialsType:         "ClientCertificate",
-			ClientCert:              []*x509.Certificate{},
+			ClientCert:              []*x509.Certificate{&x509.Certificate{}},
 			ClientPrivateKey:        "private-key",
 			Scopes:                  []string{"scope1", "scope2"},
 			Authority:               AuthorityConfiguration{},
@@ -57,7 +58,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:         "client-id",
 			CredentialsType:  "ClientCertificate",
-			ClientCert:       []*x509.Certificate{},
+			ClientCert:       []*x509.Certificate{&x509.Certificate{}},
 			ClientPrivateKey: "private-key",
 			Scopes:           []string{"scope1", "scope2"},
 			Authority:        AuthorityConfiguration{},
@@ -191,7 +192,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:         "client-id",
 			CredentialsType:  "ClientCertificate",
-			ClientCert:       []*x509.Certificate{},
+			ClientCert:       []*x509.Certificate{&x509.Certificate{}},
 			ClientPrivateKey: nil,
 			Scopes:           []string{"scope1", "scope2"},
 			Authority:        AuthorityConfiguration{},
@@ -260,14 +261,16 @@ func TestConfidentialIdentityProvider_RequestToken(t *testing.T) {
 			Return(confidential.AuthResult{
 				ExpiresOn: expiresOn,
 			}, nil)
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		if err != nil {
 			t.Errorf("RequestToken() error = %v", err)
 			return
 		}
 		assert.NotEmpty(t, token, "RequestToken() token should not be empty")
 		assert.Equal(t, token.Type(), shared.ResponseTypeAuthResult, "RequestToken() token type should be AuthResult")
-		assert.Equal(t, token.AuthResult().ExpiresOn, expiresOn, "RequestToken() token expiration should match")
+		res, err := token.(shared.AuthResultIDPResponse).AuthResult()
+		assert.NoError(t, err, "RequestToken() token should be AuthResultIDPResponse")
+		assert.Equal(t, expiresOn, res.ExpiresOn, "RequestToken() token should be equal to expiresOn")
 	})
 	t.Run("with error", func(t *testing.T) {
 		t.Parallel()
@@ -294,14 +297,14 @@ func TestConfidentialIdentityProvider_RequestToken(t *testing.T) {
 		provider.client = mClient
 		mClient.On("AcquireTokenByCredential", mock.Anything, mock.Anything).
 			Return(confidential.AuthResult{}, fmt.Errorf("error acquiring token"))
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		assert.ErrorContains(t, err, "failed to acquire token:")
 		assert.Empty(t, token, "RequestToken() token should be empty")
 	})
 	t.Run("without initialization", func(t *testing.T) {
 		t.Parallel()
 		provider := &ConfidentialIdentityProvider{}
-		token, err := provider.RequestToken()
+		token, err := provider.RequestToken(context.Background())
 		assert.ErrorContains(t, err, "client is not initialized")
 		assert.Empty(t, token, "RequestToken() token should be empty")
 	})

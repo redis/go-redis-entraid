@@ -64,24 +64,14 @@ func (t *Token) ExpirationOn() time.Time {
 	return t.expiresOn
 }
 
+// TTL returns the time to live of the token.
+func (t *Token) TTL() int64 {
+	return t.ttl
+}
+
 // Copy creates a copy of the token.
 func (t *Token) Copy() *Token {
 	return copyToken(t)
-}
-
-// compareCredentials two tokens if they are the same credentials
-func (t *Token) compareCredentials(token *Token) bool {
-	return t.username == token.username && t.password == token.password
-}
-
-// compareRawCredentials two tokens if they are the same raw credentials
-func (t *Token) compareRawCredentials(token *Token) bool {
-	return t.rawToken == token.rawToken
-}
-
-// compareToken compares two tokens if they are the same token
-func (t *Token) compareToken(token *Token) bool {
-	return t.compareCredentials(token) && t.compareRawCredentials(token)
 }
 
 // copyToken creates a copy of the token.

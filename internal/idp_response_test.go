@@ -51,6 +51,7 @@ func TestIDPResp_AuthResult(t *testing.T) {
 		authResult    *public.AuthResult
 		wantToken     string
 		wantExpiresOn time.Time
+		wantErr       error
 	}{
 		{
 			name:          "With AuthResult",
@@ -63,6 +64,7 @@ func TestIDPResp_AuthResult(t *testing.T) {
 			authResult:    nil,
 			wantToken:     "",
 			wantExpiresOn: time.Time{},
+			wantErr:       ErrAuthResultNotFound,
 		},
 	}
 
@@ -71,9 +73,9 @@ func TestIDPResp_AuthResult(t *testing.T) {
 			resp := &IDPResp{
 				authResultVal: tt.authResult,
 			}
-			got := resp.AuthResult()
-			if got.AccessToken != tt.wantToken {
-				t.Errorf("IDPResp.AuthResult().AccessToken = %v, want %v", got.AccessToken, tt.wantToken)
+			got, err := resp.AuthResult()
+			if got.AccessToken != tt.wantToken || err != tt.wantErr {
+				t.Errorf("IDPResp.AuthResult().AccessToken = %v, %v, want %v, %v", got.AccessToken, err, tt.wantToken, tt.wantErr)
 			}
 			if !got.ExpiresOn.Equal(tt.wantExpiresOn) {
 				t.Errorf("IDPResp.AuthResult().ExpiresOn = %v, want %v", got.ExpiresOn, tt.wantExpiresOn)
@@ -94,18 +96,21 @@ func TestIDPResp_AccessToken(t *testing.T) {
 		accessToken   *azcore.AccessToken
 		wantToken     string
 		wantExpiresOn time.Time
+		wantErr       error
 	}{
 		{
 			name:          "With AccessToken",
 			accessToken:   accessToken,
 			wantToken:     "test-token",
 			wantExpiresOn: now,
+			wantErr:       nil,
 		},
 		{
 			name:          "Nil AccessToken",
 			accessToken:   nil,
 			wantToken:     "",
 			wantExpiresOn: time.Time{},
+			wantErr:       ErrAccessTokenNotFound,
 		},
 	}
 
@@ -114,8 +119,8 @@ func TestIDPResp_AccessToken(t *testing.T) {
 			resp := &IDPResp{
 				accessTokenVal: tt.accessToken,
 			}
-			got := resp.AccessToken()
-			if got.Token != tt.wantToken {
+			got, err := resp.AccessToken()
+			if got.Token != tt.wantToken || err != tt.wantErr {
 				t.Errorf("IDPResp.AccessToken().Token = %v, want %v", got.Token, tt.wantToken)
 			}
 			if !got.ExpiresOn.Equal(tt.wantExpiresOn) {
@@ -130,6 +135,7 @@ func TestIDPResp_RawToken(t *testing.T) {
 		name     string
 		rawToken string
 		want     string
+		err      error
 	}{
 		{
 			name:     "With RawToken",
@@ -140,6 +146,7 @@ func TestIDPResp_RawToken(t *testing.T) {
 			name:     "Empty RawToken",
 			rawToken: "",
 			want:     "",
+			err:      ErrRawTokenNotFound,
 		},
 	}
 
@@ -148,8 +155,8 @@ func TestIDPResp_RawToken(t *testing.T) {
 			resp := &IDPResp{
 				rawTokenVal: tt.rawToken,
 			}
-			if got := resp.RawToken(); got != tt.want {
-				t.Errorf("IDPResp.RawToken() = %v, want %v", got, tt.want)
+			if got, err := resp.RawToken(); got != tt.want || err != tt.err {
+				t.Errorf("IDPResp.RawToken() = %v, %v, want %v, %v", got, err, tt.want, tt.err)
 			}
 		})
 	}
@@ -171,10 +178,9 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAuthResult())
-				assert.Equal(t, "test-token", resp.AuthResult().AccessToken)
-				assert.False(t, resp.HasAccessToken())
-				assert.False(t, resp.HasRawToken())
+				token, err := resp.AuthResult()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", token.AccessToken)
 			},
 		},
 		{
@@ -185,8 +191,9 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAuthResult())
-				assert.Equal(t, "test-token", resp.AuthResult().AccessToken)
+				result, err := resp.AuthResult()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", result.AccessToken)
 			},
 		},
 		{
@@ -198,9 +205,9 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAccessToken())
-				assert.Equal(t, "test-token", resp.AccessToken().Token)
-				assert.Equal(t, "test-token", resp.RawToken())
+				token, err := resp.AccessToken()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", token.Token)
 			},
 		},
 		{
@@ -212,9 +219,9 @@ func TestNewIDPResp(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasAccessToken())
-				assert.Equal(t, "test-token", resp.AccessToken().Token)
-				assert.Equal(t, "test-token", resp.RawToken())
+				token, err := resp.AccessToken()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", token.Token)
 			},
 		},
 		{
@@ -223,10 +230,9 @@ func TestNewIDPResp(t *testing.T) {
 			result:     "test-token",
 			wantErr:    false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasRawToken())
-				assert.Equal(t, "test-token", resp.RawToken())
-				assert.False(t, resp.HasAuthResult())
-				assert.False(t, resp.HasAccessToken())
+				rawToken, err := resp.RawToken()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", rawToken)
 			},
 		},
 		{
@@ -235,8 +241,9 @@ func TestNewIDPResp(t *testing.T) {
 			result:     stringPtr("test-token"),
 			wantErr:    false,
 			checkResult: func(t *testing.T, resp *IDPResp) {
-				assert.True(t, resp.HasRawToken())
-				assert.Equal(t, "test-token", resp.RawToken())
+				rawToken, err := resp.RawToken()
+				assert.NoError(t, err)
+				assert.Equal(t, "test-token", rawToken)
 			},
 		},
 		{
