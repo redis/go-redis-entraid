@@ -29,12 +29,12 @@ func main() {
 		panic(err)
 	}
 
-	redis := redis.NewClient(&redis.Options{
+	client := redis.NewClient(&redis.Options{
 		Addr:                         ":6379",
 		StreamingCredentialsProvider: cp,
 	})
 
-	ok, err := redis.Ping(ctx).Result()
+	ok, err := client.Ping(ctx).Result()
 	if err != nil {
 		panic(err)
 	}
