@@ -96,7 +96,8 @@ type defaultIdentityProviderResponseParser struct{}
 
 // ParseResponse parses the response from the identity provider and extracts the token.
 // It takes an IdentityProviderResponse as an argument and returns a Token and an error if any.
-// The IdentityProviderResponse contains the raw token and the expiration time.
+// The raw token is extracted based on the IdentityProviderResponse Type and then
+// is parsed as a JWT token to extract the claims.
 func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.IdentityProviderResponse) (*token.Token, error) {
 	if response == nil {
 		return nil, fmt.Errorf("identity provider response cannot be nil")
@@ -113,82 +114,51 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 			return nil, fmt.Errorf("failed to get auth result: %w", err)
 		}
 
-		claims := struct {
-			jwt.RegisteredClaims
-			Oid string `json:"oid,omitempty"`
-		}{}
-
-		// Parse the token to extract claims, but note that signature verification
-		// should be handled by the identity provider
-		_, _, err = jwt.NewParser().ParseUnverified(authResult.AccessToken, &claims)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse JWT token: %w", err)
-		}
-
-		if claims.Oid == "" {
-			return nil, fmt.Errorf("auth result OID is empty")
-		}
-
-		if claims.ExpiresAt.IsZero() {
-			return nil, fmt.Errorf("auth result expiration time is not set")
-		}
-
+		expiresOn = authResult.ExpiresOn.UTC()
 		rawToken = authResult.AccessToken
-		username = claims.Oid
-		password = rawToken
-		expiresOn = claims.ExpiresAt.UTC()
-
-	case shared.ResponseTypeRawToken, shared.ResponseTypeAccessToken:
-		var tokenStr string
-		var err error
-		if response.Type() == shared.ResponseTypeRawToken {
-			tokenStr, err = response.(shared.RawTokenIDPResponse).RawToken()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get raw token: %w", err)
-			}
-		}
-		if response.Type() == shared.ResponseTypeAccessToken {
-			accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get access token: %w", err)
-			}
-			if accessToken.Token == "" {
-				return nil, fmt.Errorf("access token value is empty")
-			}
-			tokenStr = accessToken.Token
-			expiresOn = accessToken.ExpiresOn.UTC()
-		}
-
-		if tokenStr == "" {
-			return nil, fmt.Errorf("raw token is empty")
-		}
-
-		claims := struct {
-			jwt.RegisteredClaims
-			Oid string `json:"oid,omitempty"`
-		}{}
-
-		// Parse the token to extract claims, but note that signature verification
-		// should be handled by the identity provider
-		_, _, err = jwt.NewParser().ParseUnverified(tokenStr, &claims)
+	case shared.ResponseTypeAccessToken:
+		accessToken, err := response.(shared.AccessTokenIDPResponse).AccessToken()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse JWT token: %w", err)
+			return nil, fmt.Errorf("failed to get access token: %w", err)
 		}
 
-		if claims.Oid == "" {
-			return nil, fmt.Errorf("JWT token does not contain OID claim")
+		rawToken = accessToken.Token
+		expiresOn = accessToken.ExpiresOn.UTC()
+	case shared.ResponseTypeRawToken:
+		tokenStr, err := response.(shared.RawTokenIDPResponse).RawToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get raw token: %w", err)
 		}
-
 		rawToken = tokenStr
-		username = claims.Oid
-		password = rawToken
-
-		if expiresOn.IsZero() && claims.ExpiresAt != nil {
-			expiresOn = claims.ExpiresAt.UTC()
-		}
-
 	default:
 		return nil, fmt.Errorf("unsupported response type: %s", response.Type())
+	}
+
+	if rawToken == "" {
+		return nil, fmt.Errorf("raw token is empty")
+	}
+
+	// Parse JWT
+	claims := struct {
+		jwt.RegisteredClaims
+		Oid string `json:"oid,omitempty"`
+	}{}
+
+	// Parse the token to extract claims, but note that signature verification
+	// should be handled by the identity provider
+	_, _, err := jwt.NewParser().ParseUnverified(rawToken, &claims)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JWT token: %w", err)
+	}
+
+	if claims.Oid == "" {
+		return nil, fmt.Errorf("JWT token does not contain OID claim")
+	}
+
+	username = claims.Oid
+	password = rawToken
+	if expiresOn.IsZero() && claims.ExpiresAt != nil {
+		expiresOn = claims.ExpiresAt.UTC()
 	}
 
 	if expiresOn.IsZero() {
