@@ -19,7 +19,6 @@ const (
 )
 
 var ErrInvalidIDPResponse = internal.ErrInvalidIDPResponse
-var ErrInvalidIDPResponseType = internal.ErrInvalidIDPResponseType
 var ErrAuthResultNotFound = internal.ErrAuthResultNotFound
 var ErrAccessTokenNotFound = internal.ErrAccessTokenNotFound
 var ErrRawTokenNotFound = internal.ErrRawTokenNotFound

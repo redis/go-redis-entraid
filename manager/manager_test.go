@@ -84,6 +84,25 @@ func newTestJWTToken(expiresOn time.Time) string {
 	return tokenStr
 }
 
+func newTestJWTTokenWithoutOID(expiresOn time.Time) string {
+	claims := struct {
+		jwt.RegisteredClaims
+	}{}
+
+	// Parse the token to extract claims, but note that signature verification
+	// should be handled by the identity provider
+	_, _, err := jwt.NewParser().ParseUnverified(testJWTToken, &claims)
+	if err != nil {
+		panic(err)
+	}
+	claims.ExpiresAt = jwt.NewNumericDate(expiresOn)
+	tokenStr, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("qwertyuiopasdfghjklzxcvbnm123456"))
+	if err != nil {
+		panic(err)
+	}
+	return tokenStr
+}
+
 type mockIdentityProviderResponseParser struct {
 	// Mock implementation of the IdentityProviderResponseParser interface
 	mock.Mock

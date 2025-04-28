@@ -439,6 +439,34 @@ func TestDefaultIdentityProviderResponseParser(t *testing.T) {
 		assert.NotNil(t, token1)
 		assert.InEpsilon(t, authResultVal.ExpiresOn.Unix(), token1.ExpirationOn().Unix(), 1)
 	})
+	t.Run("Default IdentityProviderResponseParser with type AuthResult and empty token", func(t *testing.T) {
+		t.Parallel()
+		authResultVal := &public.AuthResult{
+			ExpiresOn:   time.Now().Add(time.Hour).UTC(),
+			AccessToken: "",
+		}
+		idpResponse := &authResult{
+			ResultType:    shared.ResponseTypeAuthResult,
+			AuthResultVal: authResultVal,
+		}
+		token1, err := parser.ParseResponse(idpResponse)
+		assert.Error(t, err)
+		assert.Nil(t, token1)
+	})
+	t.Run("Default IdentityProviderResponseParser with type AuthResult and token without oid", func(t *testing.T) {
+		t.Parallel()
+		authResultVal := &public.AuthResult{
+			ExpiresOn:   time.Now().Add(time.Hour).UTC(),
+			AccessToken: newTestJWTTokenWithoutOID(time.Now().Add(time.Hour).UTC()),
+		}
+		idpResponse := &authResult{
+			ResultType:    shared.ResponseTypeAuthResult,
+			AuthResultVal: authResultVal,
+		}
+		token1, err := parser.ParseResponse(idpResponse)
+		assert.Error(t, err)
+		assert.Nil(t, token1)
+	})
 	t.Run("Default IdentityProviderResponseParser with type AccessToken", func(t *testing.T) {
 		t.Parallel()
 		accessToken := &azcore.AccessToken{
