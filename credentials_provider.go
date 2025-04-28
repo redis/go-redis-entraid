@@ -60,7 +60,7 @@ func (e *entraidCredentialsProvider) onTokenError(err error) {
 //
 // Returns:
 // - auth.Credentials: The current credentials for the listener.
-// - auth.CancelProviderFunc: A function that can be called to unsubscribe the listener.
+// - auth.UnsubscribeFunc: A function that can be called to unsubscribe the listener.
 // - error: An error if the subscription fails, such as if the token cannot be retrieved.
 //
 // Note: If the listener is already subscribed, it will not receive duplicate notifications.
