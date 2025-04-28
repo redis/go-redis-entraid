@@ -84,7 +84,7 @@ func (m *fakeTokenManager) Start(listener manager.TokenListener) (manager.StopFu
 	}, nil
 }
 
-func (m *fakeTokenManager) Stop() error {
+func (m *fakeTokenManager) stop() error {
 	return nil
 }
 
@@ -163,7 +163,7 @@ func (m *mockTokenManager) Start(listener manager.TokenListener) (manager.StopFu
 	m.lock.Unlock()
 	return args.Get(0).(manager.StopFunc), args.Error(1)
 }
-func (m *mockTokenManager) Stop() error {
+func (m *mockTokenManager) stop() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.listener == nil {

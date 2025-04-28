@@ -83,8 +83,6 @@ type TokenManager interface {
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a channel that will receive updates.
 	Start(listener TokenListener) (StopFunc, error)
-	// Stop stops the token manager and releases any resources.
-	Stop() error
 }
 
 // StopFunc is a function that stops the token manager.
@@ -327,11 +325,11 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 		}
 	}(listener, e.closedChan)
 
-	return e.Stop, nil
+	return e.stop, nil
 }
 
-// Stop closes the token manager and releases any resources.
-func (e *entraidTokenManager) Stop() (err error) {
+// stop closes the token manager and releases any resources.
+func (e *entraidTokenManager) stop() (err error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	defer func() {

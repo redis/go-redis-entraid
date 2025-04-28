@@ -104,7 +104,7 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 	var username, password, rawToken string
 	var expiresOn time.Time
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 
 	switch response.Type() {
 	case shared.ResponseTypeAuthResult:

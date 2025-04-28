@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis-developer/go-redis-entraid/shared"
 	"github.com/redis-developer/go-redis-entraid/token"
 	"github.com/stretchr/testify/mock"
@@ -62,6 +63,26 @@ var testTokenValid = token.New(
 	time.Now(),
 	int64(time.Hour),
 )
+
+func newTestJWTToken(expiresOn time.Time) string {
+	claims := struct {
+		jwt.RegisteredClaims
+		Oid string `json:"oid,omitempty"`
+	}{}
+
+	// Parse the token to extract claims, but note that signature verification
+	// should be handled by the identity provider
+	_, _, err := jwt.NewParser().ParseUnverified(testJWTToken, &claims)
+	if err != nil {
+		panic(err)
+	}
+	claims.ExpiresAt = jwt.NewNumericDate(expiresOn)
+	tokenStr, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("qwertyuiopasdfghjklzxcvbnm123456"))
+	if err != nil {
+		panic(err)
+	}
+	return tokenStr
+}
 
 type mockIdentityProviderResponseParser struct {
 	// Mock implementation of the IdentityProviderResponseParser interface
