@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	DefaultRequestTimeout                = 30 * time.Second
 	DefaultExpirationRefreshRatio        = 0.7
 	DefaultRetryOptionsMaxAttempts       = 3
 	DefaultRetryOptionsBackoffMultiplier = 2.0
@@ -85,6 +86,9 @@ func defaultTokenManagerOptionsOr(options TokenManagerOptions) TokenManagerOptio
 	if options.ExpirationRefreshRatio == 0 {
 		options.ExpirationRefreshRatio = DefaultExpirationRefreshRatio
 	}
+	if options.RequestTimeout == 0 {
+		options.RequestTimeout = DefaultRequestTimeout
+	}
 	return options
 }
 
@@ -108,16 +112,31 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		if err != nil {
 			return nil, fmt.Errorf("failed to get auth result: %w", err)
 		}
-		if authResult.ExpiresOn.IsZero() {
-			return nil, fmt.Errorf("auth result expiration time is not set")
+
+		claims := struct {
+			jwt.RegisteredClaims
+			Oid string `json:"oid,omitempty"`
+		}{}
+
+		// Parse the token to extract claims, but note that signature verification
+		// should be handled by the identity provider
+		_, _, err = jwt.NewParser().ParseUnverified(authResult.AccessToken, &claims)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse JWT token: %w", err)
 		}
-		if authResult.IDToken.Oid == "" {
+
+		if claims.Oid == "" {
 			return nil, fmt.Errorf("auth result OID is empty")
 		}
-		rawToken = authResult.IDToken.RawToken
-		username = authResult.IDToken.Oid
+
+		if claims.ExpiresAt.IsZero() {
+			return nil, fmt.Errorf("auth result expiration time is not set")
+		}
+
+		rawToken = authResult.AccessToken
+		username = claims.Oid
 		password = rawToken
-		expiresOn = authResult.ExpiresOn.UTC()
+		expiresOn = claims.ExpiresAt.UTC()
 
 	case shared.ResponseTypeRawToken, shared.ResponseTypeAccessToken:
 		var tokenStr string

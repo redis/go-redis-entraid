@@ -44,6 +44,8 @@ type TokenManagerOptions struct {
 	RetryOptions RetryOptions
 
 	// RequestTimeout is the timeout for the request to the identity provider.
+	//
+	// default: 30 seconds
 	RequestTimeout time.Duration
 }
 
