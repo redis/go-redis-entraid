@@ -3,6 +3,7 @@ package manager
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"time"
@@ -105,7 +106,7 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 
 	var username, password, rawToken string
 	var expiresOn time.Time
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().UTC().Truncate(time.Second).Add(time.Second)
 
 	switch response.Type() {
 	case shared.ResponseTypeAuthResult:
@@ -176,6 +177,6 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		rawToken,
 		expiresOn,
 		now,
-		int64(time.Until(expiresOn).Seconds()),
+		int64(math.Ceil(time.Until(expiresOn).Seconds())),
 	), nil
 }

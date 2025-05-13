@@ -67,25 +67,22 @@ func (e *entraidCredentialsProvider) onTokenError(err error) {
 //
 // Note: If the listener is already subscribed, it will not receive duplicate notifications.
 func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener) (auth.Credentials, auth.UnsubscribeFunc, error) {
-	var token *token.Token
 	// check if the manager is working
 	// If the stopTokenManager is nil, the token manager is not started.
 	e.tmLock.Lock()
 	if e.stopTokenManager == nil {
-		t, stopTM, err := e.tokenManager.Start(tokenListenerFromCP(e))
+		stopTM, err := e.tokenManager.Start(tokenListenerFromCP(e))
 		if err != nil {
 			return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
 		}
 		e.stopTokenManager = stopTM
-		token = t
-	} else {
-		t, err := e.tokenManager.GetToken(false)
-		if err != nil {
-			return nil, nil, fmt.Errorf("couldn't get token: %w", err)
-		}
-		token = t
 	}
 	e.tmLock.Unlock()
+
+	token, err := e.tokenManager.GetToken(false)
+	if err != nil {
+		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
+	}
 
 	e.rwLock.Lock()
 	// Check if the listener is already in the list of listeners.
@@ -152,5 +149,11 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		options:      options,
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
+	// Start the token manager.
+	stop, err := tokenManager.Start(tokenListenerFromCP(cp))
+	if err != nil {
+		return nil, fmt.Errorf("couldn't start token manager: %w", err)
+	}
+	cp.stopTokenManager = stop
 	return cp, nil
 }

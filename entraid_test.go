@@ -48,7 +48,7 @@ func (m *fakeTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
 			rawTokenString,
 			time.Now().Add(tokenExpiration),
 			time.Now(),
-			int64(100*time.Millisecond),
+			int64(tokenExpiration.Seconds()),
 		)
 	}
 	return m.token, m.err

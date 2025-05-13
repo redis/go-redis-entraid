@@ -56,6 +56,9 @@ func (t *Token) RawToken() string {
 
 // ReceivedAt returns the time when the token was received.
 func (t *Token) ReceivedAt() time.Time {
+	if t.receivedAt.IsZero() {
+		return time.Now()
+	}
 	return t.receivedAt
 }
 

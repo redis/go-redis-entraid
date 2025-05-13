@@ -290,7 +290,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
-					int64(time.Hour),
+					int64(time.Hour.Seconds()),
 				)
 
 				// Set the token manager factory in the options
