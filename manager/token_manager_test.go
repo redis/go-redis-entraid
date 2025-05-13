@@ -182,7 +182,7 @@ func TestTokenManager_Close(t *testing.T) {
 
 		var stopper StopFunc
 		assert.NotPanics(t, func() {
-			stopper, err = tokenManager.Start(listener)
+			_, stopper, err = tokenManager.Start(listener)
 			assert.NotNil(t, stopper)
 			assert.NoError(t, err)
 		})
@@ -222,7 +222,7 @@ func TestTokenManager_Close(t *testing.T) {
 		listener.On("OnNext", testTokenValid).Return()
 
 		assert.NotPanics(t, func() {
-			cancel, err := tokenManager.Start(listener)
+			_, cancel, err := tokenManager.Start(listener)
 			assert.NotNil(t, cancel)
 			assert.NoError(t, err)
 			assert.NotNil(t, tm.listener)
@@ -258,7 +258,7 @@ func TestTokenManager_Close(t *testing.T) {
 		listener.On("OnNext", testTokenValid).Return()
 
 		assert.NotPanics(t, func() {
-			stopper, err := tokenManager.Start(listener)
+			_, stopper, err := tokenManager.Start(listener)
 			assert.NotNil(t, stopper)
 			assert.NoError(t, err)
 			assert.NotNil(t, tm.listener)
@@ -329,7 +329,7 @@ func TestTokenManager_Start(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					time.Sleep(time.Duration(int64(rand.Intn(100)) * int64(time.Millisecond)))
-					_, err := tokenManager.Start(listener)
+					_, _, err := tokenManager.Start(listener)
 					if err == nil {
 						hasStarted += 1
 						return
@@ -344,7 +344,7 @@ func TestTokenManager_Start(t *testing.T) {
 			assert.NotNil(t, tm.listener)
 			assert.Equal(t, 1, hasStarted)
 			assert.Equal(t, int32(numExecutions-1), atomic.LoadInt32(&alreadyStarted))
-			cancel, err := tokenManager.Start(listener)
+			_, cancel, err := tokenManager.Start(listener)
 			assert.Nil(t, cancel)
 			assert.Error(t, err)
 			assert.NotNil(t, tm.listener)
@@ -389,7 +389,7 @@ func TestTokenManager_Start(t *testing.T) {
 					} else {
 						l := &mockTokenListener{Id: num}
 						l.On("OnNext", testTokenValid).Return()
-						_, err = tokenManager.Start(l)
+						_, _, err = tokenManager.Start(l)
 					}
 					if err != nil {
 						if err != ErrTokenManagerAlreadyStopped && err != ErrTokenManagerAlreadyStarted {
@@ -412,7 +412,7 @@ func TestTokenManager_Start(t *testing.T) {
 					log.Printf("FAILING WITH lastExecution[STOPPED]: %d", lastExecution)
 				}
 				assert.NotNil(t, tm.listener)
-				stopper, err := tokenManager.Start(listener)
+				_, stopper, err := tokenManager.Start(listener)
 				assert.Nil(t, stopper)
 				assert.Error(t, err)
 				// Stop the token manager with internal stop, since stopper should be nil
@@ -588,7 +588,8 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
 		listener.On("OnNext", testTokenValid).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		initialToken, cancel, err := tokenManager.Start(listener)
+		assert.NotNil(t, initialToken)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -596,6 +597,46 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		token1, err := tokenManager.GetToken(false)
 		assert.NoError(t, err)
 		assert.NotNil(t, token1)
+	})
+
+	t.Run("GetToken with cached token", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		listener := &mockTokenListener{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+		assert.Nil(t, tm.listener)
+
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
+		listener.On("OnNext", testTokenValid).Return()
+
+		initialToken, cancel, err := tokenManager.Start(listener)
+		assert.NotNil(t, initialToken)
+		assert.NotNil(t, cancel)
+		assert.NoError(t, err)
+		assert.NotNil(t, tm.listener)
+
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		token2, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.Equal(t, token1, token2)
 	})
 
 	t.Run("GetToken with parse error", func(t *testing.T) {
@@ -623,7 +664,7 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		mParser.On("ParseResponse", rawResponse).Return(nil, fmt.Errorf("parse error"))
 		listener.On("OnError", mock.Anything).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.Error(t, err)
 		assert.Nil(t, cancel)
 		assert.Nil(t, tm.listener)
@@ -814,7 +855,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		mParser.On("ParseResponse", idpResponse).Return(token1, nil).Once()
 		listener.On("OnNext", token1).Return().Once()
 
-		stopper, err := tokenManager.Start(listener)
+		_, stopper, err := tokenManager.Start(listener)
 		assert.NotNil(t, stopper)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -881,7 +922,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -938,7 +979,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -991,7 +1032,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -1041,7 +1082,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			assert.NotNil(t, err)
 		}).Return().Maybe()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -1095,7 +1136,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			assert.NotNil(t, err)
 		}).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -1174,7 +1215,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			close(maxAttemptsReached)
 		}).Return()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -1248,7 +1289,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			close(maxAttemptsReached)
 		}).Return().Maybe()
 
-		cancel, err := tokenManager.Start(listener)
+		_, cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
@@ -1338,7 +1379,7 @@ func BenchmarkTokenManager_Start(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = tokenManager.Start(listener)
+		_, _, _ = tokenManager.Start(listener)
 	}
 }
 
@@ -1364,7 +1405,7 @@ func BenchmarkTokenManager_Close(b *testing.B) {
 	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
 	listener.On("OnNext", testTokenValid).Return()
 
-	stopper, err := tokenManager.Start(listener)
+	_, stopper, err := tokenManager.Start(listener)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1477,7 +1518,7 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 				case 0:
 					// Start the token manager with a new listener
 					// t.Logf("Goroutine %d, Operation %d: Attempting to start token manager", routineID, j)
-					closeFunc, err := tm.Start(listener)
+					_, closeFunc, err := tm.Start(listener)
 
 					if err != nil {
 						if err != ErrTokenManagerAlreadyStarted {
@@ -1655,7 +1696,7 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 		},
 	}
 
-	closeFunc, err := tm.Start(finalListener)
+	_, closeFunc, err := tm.Start(finalListener)
 	if err != nil && err != ErrTokenManagerAlreadyStarted {
 		t.Fatalf("Failed to start token manager after concurrent operations: %v", err)
 	}

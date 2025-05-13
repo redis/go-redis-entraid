@@ -82,7 +82,7 @@ type TokenManager interface {
 	// It takes a boolean value forceRefresh as an argument.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a channel that will receive updates.
-	Start(listener TokenListener) (StopFunc, error)
+	Start(listener TokenListener) (*token.Token, StopFunc, error)
 }
 
 // StopFunc is a function that stops the token manager.
@@ -239,11 +239,11 @@ func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) 
 //
 // Note: The initial token is delivered synchronously.
 // The TokenListener will receive the token immediately, before the token manager goroutine starts.
-func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
+func (e *entraidTokenManager) Start(listener TokenListener) (*token.Token, StopFunc, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.listener != nil {
-		return nil, ErrTokenManagerAlreadyStarted
+		return nil, nil, ErrTokenManagerAlreadyStarted
 	}
 
 	if e.closedChan != nil && !internal.IsClosed(e.closedChan) {
@@ -252,14 +252,24 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 		close(e.closedChan)
 	}
 
-	t, err := e.GetToken(true)
-	if err != nil {
-		go listener.OnError(err)
-		return nil, fmt.Errorf("failed to start token manager: %w", err)
-	}
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	e.ctx = ctx
+	e.ctxCancel = ctxCancel
 
-	// Deliver initial token synchronously
-	listener.OnNext(t)
+	t, err := e.GetToken(false)
+	// If a token was found in the cache, check if:
+	// - it is expired (based on the lower bound)
+	// - it is about to expire (based on the expiration refresh ratio)
+	// if so, get a new token
+	expirationRefreshTime := t.ReceivedAt().Add(time.Duration(float64(t.TTL()) * float64(time.Second) * e.expirationRefreshRatio))
+	expirationWithoutLowerBound := t.ExpirationOn().Add(-1 * e.lowerBoundDuration)
+	now := time.Now()
+	if t != nil && (expirationWithoutLowerBound.Before(now) || expirationRefreshTime.Before(now)) {
+		t, err = e.GetToken(true)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start token manager: %w", err)
+	}
 
 	e.closedChan = make(chan struct{})
 	e.listener = listener
@@ -325,7 +335,7 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 		}
 	}(listener, e.closedChan)
 
-	return e.stop, nil
+	return t, e.stop, nil
 }
 
 // stop closes the token manager and releases any resources.
