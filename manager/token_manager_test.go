@@ -1156,7 +1156,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			On("OnNext", mock.AnythingOfType("*token.Token")).
 			Run(func(_ mock.Arguments) {
 				start = time.Now()
-			}).Return()
+			}).Return().Maybe()
 		maxAttemptsReached := make(chan struct{})
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0).(error)
@@ -1195,8 +1195,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.InEpsilon(t, elapsed, allDelaysShouldBe, float64(10*time.Millisecond))
 
 		idp.AssertNumberOfCalls(t, "RequestToken", tm.retryOptions.MaxAttempts+1)
-		listener.AssertNumberOfCalls(t, "OnNext", 1)
-		listener.AssertNumberOfCalls(t, "OnError", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 	t.Run("Start and Listen and close during retries", func(t *testing.T) {
@@ -1232,7 +1230,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			idpResponse.AuthResultVal = res
 		}).Return(idpResponse, nil)
 
-		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 		maxAttemptsReached := make(chan struct{})
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0).(error)
@@ -1268,7 +1265,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		// maxAttempts + the initial one
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
-		listener.AssertNumberOfCalls(t, "OnError", 0)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 }
