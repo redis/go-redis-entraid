@@ -32,8 +32,6 @@ github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmd
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c/go.mod h1:7rwL4CYBLnjLxUqIJNnCWiEdr3bn6IUYi15bNlnbCCU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/redis-developer/go-redis-entraid v0.0.0-20250519132904-1e25b29e9a07 h1:l/sz658wqg5ZxqT1cSrmTxGAEXVoBpVOjsZUgMHSJYw=
-github.com/redis-developer/go-redis-entraid v0.0.0-20250519132904-1e25b29e9a07/go.mod h1:4DrBBopECIq9LRo1hok3rgXUC4AGBhnZiz0Rea2tikc=
 github.com/redis/go-redis/v9 v9.5.3-0.20250519143649-1628b87c162b h1:I6Y+sXfQLIUo8vkx+EcuTcAcs0ZnPceNe8cdQ0HsjQI=
 github.com/redis/go-redis/v9 v9.5.3-0.20250519143649-1628b87c162b/go.mod h1:huWgSWd8mW6+m0VPhJjSSQ+d6Nh1VICQ6Q5lHuCH/Iw=
 github.com/stretchr/objx v0.5.2 h1:xuMeJ0Sdp5ZMRXx/aWO6RZxdr3beISkG5/G/aIRr3pY=

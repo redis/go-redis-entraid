@@ -6,54 +6,61 @@
 #export AZURE_REDIS_SCOPES="https://redis.azure.com/.default"
 #export REDIS_ENDPOINVkTS_CONFIG_PATH="endpoints.json"
 
+# Exit on any error
+set -e
+
 # Function to run an example
 run_example() {
-    echo "Running $1 example..."
-    cd "$1"
+    local example_dir=$1
+    echo "Running $example_dir example..."
+    
+    if [ ! -d "$example_dir" ]; then
+        echo "Error: Directory $example_dir does not exist"
+        return 1
+    fi
+    
+    if [ ! -f "$example_dir/main.go" ]; then
+        echo "Error: main.go not found in $example_dir"
+        return 1
+    fi
+    
+    pushd "$example_dir" > /dev/null
     go mod tidy
-    go run main.go
-    cd ..
+    if ! go run main.go; then
+        echo "Error: $example_dir example failed"
+        popd > /dev/null
+        return 1
+    fi
+    popd > /dev/null
     echo "----------------------------------------"
+    return 0
 }
 
-# Client Secret example
-#export AZURE_CLIENT_ID="your-client-id"
-#export AZURE_CLIENT_SECRET="your-client-secret"
-#export AZURE_TENANT_ID="your-tenant-id"
-run_example "clientsecret"
+# Track overall success
+failed_examples=()
 
-# Client Certificate example
-#export AZURE_CERT="your-certificate"
-#export AZURE_PRIVATE_KEY="your-private-key"
-run_example "clientcert"
+# Run all examples in the directory
+for example in */; do
+    # Skip config directory as it's not an example
+    if [ "$example" = "config/" ]; then
+        continue
+    fi
+    
+    # Remove trailing slash
+    example=${example%/}
+    
+    if ! run_example "$example"; then
+        failed_examples+=("$example")
+    fi
+done
 
-# Managed Identity example
-#export AZURE_USER_ASSIGNED_MANAGED_ID="your-managed-identity-id" # Optional
-
-# Run all examples
-echo "Running all examples..."
-
-# Run client secret example
-echo "Running client secret example..."
-go run clientsecret/main.go
-
-# Run client certificate example
-echo "Running client certificate example..."
-go run clientcert/main.go
-
-# Run managed identity examples
-echo "Running managed identity examples..."
-
-# System-assigned managed identity
-echo "Running system-assigned managed identity example..."
-go run managedidentity_system/main.go
-
-# User-assigned managed identity
-echo "Running user-assigned managed identity example..."
-go run managedidentity_user/main.go
-
-# Run interactive browser example
-echo "Running interactive browser example..."
-go run interactive/main.go
-
-echo "All examples completed!"
+# Report results
+echo "----------------------------------------"
+if [ ${#failed_examples[@]} -eq 0 ]; then
+    echo "All examples completed successfully!"
+    exit 0
+else
+    echo "The following examples failed:"
+    printf '%s\n' "${failed_examples[@]}"
+    exit 1
+fi
