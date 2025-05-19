@@ -123,6 +123,10 @@ func TestTokenReceivedAt(t *testing.T) {
 	assert.NotSame(t, token, tcopiedToken)
 	// Check if the copied token is a new instance
 	assert.NotNil(t, tcopiedToken)
+
+	emptyRecievedAt := &Token{}
+	assert.True(t, emptyRecievedAt.ReceivedAt().After(time.Now().Add(-1*time.Hour)))
+	assert.True(t, emptyRecievedAt.ReceivedAt().Before(time.Now().Add(1*time.Hour)))
 }
 
 func BenchmarkNew(b *testing.B) {

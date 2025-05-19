@@ -27,6 +27,8 @@ type entraidCredentialsProvider struct {
 
 	// rwLock is a mutex that is used to synchronize access to the listeners slice.
 	rwLock sync.RWMutex // Mutex for synchronizing access to the listeners slice.
+
+	tmLock sync.Mutex
 }
 
 // onTokenNext is a method that is called when the token manager receives a new token.
@@ -60,15 +62,26 @@ func (e *entraidCredentialsProvider) onTokenError(err error) {
 //
 // Returns:
 // - auth.Credentials: The current credentials for the listener.
-// - auth.CancelProviderFunc: A function that can be called to unsubscribe the listener.
+// - auth.UnsubscribeFunc: A function that can be called to unsubscribe the listener.
 // - error: An error if the subscription fails, such as if the token cannot be retrieved.
 //
 // Note: If the listener is already subscribed, it will not receive duplicate notifications.
 func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener) (auth.Credentials, auth.UnsubscribeFunc, error) {
-	// First try to get a token, only then subscribe the listener.
+	// check if the manager is working
+	// If the stopTokenManager is nil, the token manager is not started.
+	e.tmLock.Lock()
+	if e.stopTokenManager == nil {
+		stopTM, err := e.tokenManager.Start(tokenListenerFromCP(e))
+		if err != nil {
+			return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
+		}
+		e.stopTokenManager = stopTM
+	}
+	e.tmLock.Unlock()
+
 	token, err := e.tokenManager.GetToken(false)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
 	}
 
 	e.rwLock.Lock()
@@ -102,6 +115,7 @@ func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener
 		// Clear the listeners slice if it's empty
 		if len(e.listeners) == 0 {
 			e.listeners = make([]auth.CredentialsListener, 0)
+			e.tmLock.Lock()
 			if e.stopTokenManager != nil {
 				err := e.stopTokenManager()
 				if err != nil {
@@ -111,6 +125,7 @@ func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener
 				// This prevents multiple calls to stopTokenManager.
 				e.stopTokenManager = nil
 			}
+			e.tmLock.Unlock()
 		}
 		return nil
 	}
@@ -134,10 +149,11 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		options:      options,
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
-	stopTM, err := cp.tokenManager.Start(tokenListenerFromCP(cp))
+	// Start the token manager.
+	stop, err := tokenManager.Start(tokenListenerFromCP(cp))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't start token manager: %w", err)
 	}
-	cp.stopTokenManager = stopTM
+	cp.stopTokenManager = stop
 	return cp, nil
 }

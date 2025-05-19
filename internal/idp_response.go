@@ -36,17 +36,17 @@ func NewIDPResp(resultType string, result interface{}) (*IDPResp, error) {
 		default:
 			return nil, fmt.Errorf("invalid auth result type: expected public.AuthResult or *public.AuthResult, got %T", result)
 		}
+		r.rawTokenVal = r.authResultVal.AccessToken
 	case "AccessToken":
 		switch v := result.(type) {
 		case *azcore.AccessToken:
 			r.accessTokenVal = v
-			r.rawTokenVal = v.Token
 		case azcore.AccessToken:
 			r.accessTokenVal = &v
-			r.rawTokenVal = v.Token
 		default:
 			return nil, fmt.Errorf("invalid access token type: expected azcore.AccessToken or *azcore.AccessToken, got %T", result)
 		}
+		r.rawTokenVal = r.accessTokenVal.Token
 	case "RawToken":
 		switch v := result.(type) {
 		case string:

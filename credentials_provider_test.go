@@ -343,7 +343,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 		mtm.On("GetToken", false).Return(testToken, nil)
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, testToken, nil)).
-			Return(manager.StopFunc(mtm.Stop), nil)
+			Return(manager.StopFunc(mtm.stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
@@ -396,7 +396,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, nil, errTokenError)).
-			Return(manager.StopFunc(mtm.Stop), nil)
+			Return(manager.StopFunc(mtm.stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
@@ -467,7 +467,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 
 		mtm.On("Start", mock.Anything).
 			Run(mockTokenManagerLoop(mtm, tokenExpiration, nil, errTokenError)).
-			Return(manager.StopFunc(mtm.Stop), nil)
+			Return(manager.StopFunc(mtm.stop), nil)
 		provider, err := NewConfidentialCredentialsProvider(options)
 		require.NoError(t, err)
 		require.NotNil(t, provider)

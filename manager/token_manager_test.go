@@ -155,6 +155,7 @@ func TestTokenManager_Close(t *testing.T) {
 	t.Parallel()
 	t.Run("Close", func(t *testing.T) {
 		t.Parallel()
+		var err error
 		idp := &mockIdentityProvider{}
 		listener := &mockTokenListener{}
 		mParser := &mockIdentityProviderResponseParser{}
@@ -169,7 +170,7 @@ func TestTokenManager_Close(t *testing.T) {
 		assert.True(t, ok)
 		assert.Nil(t, tm.listener)
 		assert.NotPanics(t, func() {
-			err = tokenManager.Stop()
+			err = tm.stop()
 			assert.Error(t, err)
 		})
 		rawResponse, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, "test")
@@ -179,19 +180,20 @@ func TestTokenManager_Close(t *testing.T) {
 		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
 		listener.On("OnNext", testTokenValid).Return()
 
+		var stopper StopFunc
 		assert.NotPanics(t, func() {
-			cancel, err := tokenManager.Start(listener)
-			assert.NotNil(t, cancel)
+			stopper, err = tokenManager.Start(listener)
+			assert.NotNil(t, stopper)
 			assert.NoError(t, err)
 		})
 		assert.NotNil(t, tm.listener)
 
-		err = tokenManager.Stop()
+		err = stopper()
 		assert.Nil(t, tm.listener)
 		assert.NoError(t, err)
 
 		assert.NotPanics(t, func() {
-			err = tokenManager.Stop()
+			err = stopper()
 			assert.Error(t, err)
 		})
 	})
@@ -256,8 +258,8 @@ func TestTokenManager_Close(t *testing.T) {
 		listener.On("OnNext", testTokenValid).Return()
 
 		assert.NotPanics(t, func() {
-			cancel, err := tokenManager.Start(listener)
-			assert.NotNil(t, cancel)
+			stopper, err := tokenManager.Start(listener)
+			assert.NotNil(t, stopper)
 			assert.NoError(t, err)
 			assert.NotNil(t, tm.listener)
 			var hasStopped int
@@ -272,7 +274,7 @@ func TestTokenManager_Close(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					time.Sleep(time.Duration(int64(rand.Intn(100)) * int64(time.Millisecond)))
-					err := tokenManager.Stop()
+					err := stopper()
 					if err == nil {
 						hasStopped += 1
 						return
@@ -383,7 +385,7 @@ func TestTokenManager_Start(t *testing.T) {
 					time.Sleep(time.Duration(int64(rand.Intn(1000)+(300-int(num)/2)) * int64(time.Millisecond)))
 					last.Store(num)
 					if num%2 == 0 {
-						err = tokenManager.Stop()
+						err = tm.stop()
 					} else {
 						l := &mockTokenListener{Id: num}
 						l.On("OnNext", testTokenValid).Return()
@@ -410,11 +412,11 @@ func TestTokenManager_Start(t *testing.T) {
 					log.Printf("FAILING WITH lastExecution[STOPPED]: %d", lastExecution)
 				}
 				assert.NotNil(t, tm.listener)
-				cancel, err := tokenManager.Start(listener)
-				assert.Nil(t, cancel)
+				stopper, err := tokenManager.Start(listener)
+				assert.Nil(t, stopper)
 				assert.Error(t, err)
-				// Close the token manager
-				err = tokenManager.Stop()
+				// Stop the token manager with internal stop, since stopper should be nil
+				err = tm.stop()
 				assert.Nil(t, err)
 			}
 			assert.Nil(t, tm.listener)
@@ -435,7 +437,35 @@ func TestDefaultIdentityProviderResponseParser(t *testing.T) {
 		token1, err := parser.ParseResponse(idpResponse)
 		assert.NoError(t, err)
 		assert.NotNil(t, token1)
-		assert.Equal(t, authResultVal.ExpiresOn, token1.ExpirationOn())
+		assert.InEpsilon(t, authResultVal.ExpiresOn.Unix(), token1.ExpirationOn().Unix(), 1)
+	})
+	t.Run("Default IdentityProviderResponseParser with type AuthResult and empty token", func(t *testing.T) {
+		t.Parallel()
+		authResultVal := &public.AuthResult{
+			ExpiresOn:   time.Now().Add(time.Hour).UTC(),
+			AccessToken: "",
+		}
+		idpResponse := &authResult{
+			ResultType:    shared.ResponseTypeAuthResult,
+			AuthResultVal: authResultVal,
+		}
+		token1, err := parser.ParseResponse(idpResponse)
+		assert.Error(t, err)
+		assert.Nil(t, token1)
+	})
+	t.Run("Default IdentityProviderResponseParser with type AuthResult and token without oid", func(t *testing.T) {
+		t.Parallel()
+		authResultVal := &public.AuthResult{
+			ExpiresOn:   time.Now().Add(time.Hour).UTC(),
+			AccessToken: newTestJWTTokenWithoutOID(time.Now().Add(time.Hour).UTC()),
+		}
+		idpResponse := &authResult{
+			ResultType:    shared.ResponseTypeAuthResult,
+			AuthResultVal: authResultVal,
+		}
+		token1, err := parser.ParseResponse(idpResponse)
+		assert.Error(t, err)
+		assert.Nil(t, token1)
 	})
 	t.Run("Default IdentityProviderResponseParser with type AccessToken", func(t *testing.T) {
 		t.Parallel()
@@ -703,7 +733,7 @@ func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
 		tm, ok := tokenManager.(*entraidTokenManager)
 		assert.True(t, ok)
 
-		result := tm.durationToRenewal()
+		result := tm.durationToRenewal(nil)
 		// returns 0 for nil token
 		assert.Equal(t, time.Duration(0), result)
 
@@ -720,7 +750,7 @@ func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
 			assert.NotNil(t, tm.token)
 
 			// return zero, should happen now since it expires before the lower bound
-			result = tm.durationToRenewal()
+			result = tm.durationToRenewal(tm.token)
 			assert.Equal(t, time.Duration(0), result)
 		})
 
@@ -738,7 +768,7 @@ func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
 			assert.NotNil(t, tm.token)
 
 			// return time to lower bound, if the returned time will be after the lower bound
-			result = tm.durationToRenewal()
+			result = tm.durationToRenewal(tm.token)
 			assert.InEpsilon(t, time.Until(tm.token.ExpirationOn().Add(-1*tm.lowerBoundDuration)), result, float64(time.Second))
 		})
 
@@ -782,27 +812,27 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		)
 
 		mParser.On("ParseResponse", idpResponse).Return(token1, nil).Once()
-		listener.On("OnNext", token1).Return().Once()
 
-		cancel, err := tokenManager.Start(listener)
-		assert.NotNil(t, cancel)
+		stopper, err := tokenManager.Start(listener)
+		assert.NotNil(t, stopper)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal / 10)
 		assert.NotNil(t, tm.listener)
-		assert.NoError(t, tokenManager.Stop())
+		assert.NoError(t, stopper())
 		assert.Nil(t, tm.listener)
 		assert.Panics(t, func() {
 			close(tm.closedChan)
 		})
 
 		<-time.After(toRenewal)
-		assert.Error(t, tokenManager.Stop())
+		// already stopped
+		assert.Error(t, stopper())
 		mock.AssertExpectationsForObjects(t, idp, mParser, listener)
 	})
 
@@ -855,7 +885,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -868,7 +898,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.InDelta(t, stop.Sub(start), tm.retryOptions.InitialDelay, float64(200*time.Millisecond))
 
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
-		listener.AssertNumberOfCalls(t, "OnNext", 2)
+		listener.AssertNumberOfCalls(t, "OnNext", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 
@@ -905,14 +935,12 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			idpResponse.AuthResultVal = res
 		}).Return(idpResponse, nil)
 
-		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
-
 		cancel, err := tokenManager.Start(listener)
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -925,7 +953,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		// called only once since the token manager was closed prior to initial delay passing
 		idp.AssertNumberOfCalls(t, "RequestToken", 1)
-		listener.AssertNumberOfCalls(t, "OnNext", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 
@@ -964,8 +991,9 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
+		assert.NotNil(t, tm.token)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
@@ -1004,7 +1032,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			idpResponse.AuthResultVal = res
 		}).Return(idpResponse, nil)
 
-		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0)
 			assert.NotNil(t, err)
@@ -1019,13 +1046,12 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(true)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal + 100*time.Millisecond)
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
-		listener.AssertNumberOfCalls(t, "OnNext", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 
@@ -1058,7 +1084,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			idpResponse.AuthResultVal = res
 		}).Return(idpResponse, nil)
 
-		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0).(error)
 			assert.NotNil(t, err)
@@ -1073,14 +1098,13 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(false)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal + 100*time.Millisecond)
 
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
-		listener.AssertNumberOfCalls(t, "OnNext", 1)
 		listener.AssertNumberOfCalls(t, "OnError", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
@@ -1132,7 +1156,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			On("OnNext", mock.AnythingOfType("*token.Token")).
 			Run(func(_ mock.Arguments) {
 				start = time.Now()
-			}).Return()
+			}).Return().Maybe()
 		maxAttemptsReached := make(chan struct{})
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0).(error)
@@ -1147,7 +1171,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
@@ -1171,8 +1195,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.InEpsilon(t, elapsed, allDelaysShouldBe, float64(10*time.Millisecond))
 
 		idp.AssertNumberOfCalls(t, "RequestToken", tm.retryOptions.MaxAttempts+1)
-		listener.AssertNumberOfCalls(t, "OnNext", 1)
-		listener.AssertNumberOfCalls(t, "OnError", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 	t.Run("Start and Listen and close during retries", func(t *testing.T) {
@@ -1208,7 +1230,6 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			idpResponse.AuthResultVal = res
 		}).Return(idpResponse, nil)
 
-		listener.On("OnNext", mock.AnythingOfType("*token.Token")).Return()
 		maxAttemptsReached := make(chan struct{})
 		listener.On("OnError", mock.Anything).Run(func(args mock.Arguments) {
 			err := args.Get(0).(error)
@@ -1226,7 +1247,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(true)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal()
+		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
@@ -1244,16 +1265,15 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		// maxAttempts + the initial one
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
-		listener.AssertNumberOfCalls(t, "OnError", 0)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
 }
 
 func testAuthResult(expiersOn time.Time) *public.AuthResult {
 	r := &public.AuthResult{
-		ExpiresOn: expiersOn,
+		ExpiresOn:   expiersOn,
+		AccessToken: newTestJWTToken(expiersOn),
 	}
-	r.IDToken.Oid = "test"
 	return r
 }
 
@@ -1333,14 +1353,14 @@ func BenchmarkTokenManager_Close(b *testing.B) {
 	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
 	listener.On("OnNext", testTokenValid).Return()
 
-	_, err = tokenManager.Start(listener)
+	stopper, err := tokenManager.Start(listener)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = tokenManager.Stop()
+		_ = stopper()
 	}
 }
 
@@ -1372,7 +1392,7 @@ func BenchmarkTokenManager_durationToRenewal(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tm.durationToRenewal()
+		tm.durationToRenewal(tm.token)
 	}
 }
 

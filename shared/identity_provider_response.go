@@ -19,7 +19,6 @@ const (
 )
 
 var ErrInvalidIDPResponse = internal.ErrInvalidIDPResponse
-var ErrInvalidIDPResponseType = internal.ErrInvalidIDPResponseType
 var ErrAuthResultNotFound = internal.ErrAuthResultNotFound
 var ErrAccessTokenNotFound = internal.ErrAccessTokenNotFound
 var ErrRawTokenNotFound = internal.ErrRawTokenNotFound
@@ -43,11 +42,15 @@ type IdentityProviderResponseParser interface {
 type IdentityProviderResponse interface {
 	// Type returns the type of identity provider response
 	Type() string
+	// RawToken returns the raw token string.
+	// Returns ErrRawTokenNotFound if the raw token is not set.
+	RawToken() (string, error)
 }
 
 // AuthResultIDPResponse is an interface that defines the method for getting the auth result.
 // Returns ErrAuthResultNotFound if the auth result is not set.
 type AuthResultIDPResponse interface {
+	IdentityProviderResponse
 	// AuthResult returns the Microsoft Authentication Library AuthResult.
 	// Returns ErrAuthResultNotFound if the auth result is not set.
 	AuthResult() (public.AuthResult, error)
@@ -56,28 +59,19 @@ type AuthResultIDPResponse interface {
 // AccessTokenIDPResponse is an interface that defines the method for getting the access token.
 // Returns ErrAccessTokenNotFound if the access token is not set.
 type AccessTokenIDPResponse interface {
+	IdentityProviderResponse
 	// AccessToken returns the Azure SDK AccessToken.
 	// Returns ErrAccessTokenNotFound if the access token is not set.
 	AccessToken() (azcore.AccessToken, error)
 }
 
-// RawTokenIDPResponse is an interface that defines the method for getting the raw token.
-// Returns ErrRawTokenNotFound if the raw token is not set.
 type RawTokenIDPResponse interface {
-	// RawToken returns the raw token string.
-	// Returns ErrRawTokenNotFound if the raw token is not set.
-	RawToken() (string, error)
+	IdentityProviderResponse
 }
 
 // IdentityProvider is an interface that defines the methods for an identity provider.
 // It is used to request a token for authentication.
 // The identity provider is responsible for providing the raw authentication token.
-// Available errors:
-// - ErrInvalidIDPResponse: When the response from the identity provider is invalid
-// - ErrInvalidIDPResponseType: When the response type is not supported
-// - ErrAuthResultNotFound: When trying to get an AuthResult that is not set
-// - ErrAccessTokenNotFound: When trying to get an AccessToken that is not set
-// - ErrRawTokenNotFound: When trying to get a RawToken that is not set
 type IdentityProvider interface {
 	// RequestToken requests a token from the identity provider.
 	// The context is passed to the request to allow for cancellation and timeouts.
