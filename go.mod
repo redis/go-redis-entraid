@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0-beta.1
-	github.com/redis/go-redis/v9 v9.5.3-0.20250416091253-d0a8c76d8420
+	github.com/redis/go-redis/v9 v9.5.3-0.20250519143649-1628b87c162b
 	github.com/stretchr/testify v1.10.0
 )
 

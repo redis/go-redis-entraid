@@ -411,10 +411,10 @@ authority := identity.AuthorityConfiguration{
 ```go
 // Create provider for system assigned identity
 provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-        ClientID: os.Getenv("AZURE_CLIENT_ID"),
+    ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+        ManagedIdentityType: identity.SystemAssignedIdentity,
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
-    ManagedIdentityType: identity.SystemAssignedIdentity,
 })
 ```
 
@@ -425,23 +425,27 @@ provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedId
     CredentialsProviderOptions: entraid.CredentialsProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
     },
-    ManagedIdentityType: identity.UserAssignedIdentity,
-    UserAssignedClientID: os.Getenv("USER_ASSIGNED_CLIENT_ID"),
+    ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+        ManagedIdentityType: identity.UserAssignedIdentity,
+        UserAssignedClientID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
+        Scopes: []string{"https://redis.azure.com/.default"},
+    },
 })
 ```
 
 ### Client Secret Authentication
 ```go
 // Create provider for client secret authentication
-provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialIdentityProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
+provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialCredentialsProviderOptions{
+    ConfidentialIdentityProviderOptions: identity.ConfidentialIdentityProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
-    },
-    CredentialsType: identity.ClientSecretCredentialType,
-    ClientSecret: os.Getenv("AZURE_CLIENT_SECRET"),
-    Authority: identity.AuthorityConfiguration{
-        AuthorityType: identity.AuthorityTypeDefault,
-        TenantID: os.Getenv("AZURE_TENANT_ID"),
+        ClientSecret: os.Getenv("AZURE_CLIENT_SECRET"),
+        CredentialsType: identity.ClientSecretCredentialType,
+        Authority: identity.AuthorityConfiguration{
+            AuthorityType: identity.AuthorityTypeMultiTenant,
+            TenantID: os.Getenv("AZURE_TENANT_ID"),
+        },
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
 })
 ```
@@ -454,16 +458,27 @@ if err != nil {
     log.Fatal(err)
 }
 
-provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialIdentityProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
+provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialCredentialsProviderOptions{
+    ConfidentialIdentityProviderOptions: identity.ConfidentialIdentityProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
+        CredentialsType: identity.ClientCertificateCredentialType,
+        Authority: identity.AuthorityConfiguration{
+            AuthorityType: identity.AuthorityTypeMultiTenant,
+            TenantID: os.Getenv("AZURE_TENANT_ID"),
+        },
+        Scopes: []string{"https://redis.azure.com/.default"},
+        ClientCert: []*x509.Certificate{cert.Leaf},
+        ClientPrivateKey: cert.PrivateKey,
     },
-    CredentialsType: identity.ClientCertificateCredentialType,
-    ClientCert: []*x509.Certificate{cert.Leaf},
-    ClientPrivateKey: cert.PrivateKey,
-    Authority: identity.AuthorityConfiguration{
-        AuthorityType: identity.AuthorityTypeDefault,
-        TenantID: os.Getenv("AZURE_TENANT_ID"),
+})
+```
+
+### Default Azure Identity
+```go
+// Create a default credentials provider
+provider, err := entraid.NewDefaultAzureCredentialsProvider(entraid.DefaultAzureCredentialsProviderOptions{
+    DefaultAzureIdentityProviderOptions: identity.DefaultAzureIdentityProviderOptions{
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
 })
 ```
