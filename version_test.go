@@ -1,4 +1,4 @@
-package redis
+package entraid
 
 import (
 	"testing"

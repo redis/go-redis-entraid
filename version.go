@@ -1,4 +1,4 @@
-package redis
+package entraid
 
 const version = "0.0.1"
 
