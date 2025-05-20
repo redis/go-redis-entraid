@@ -8,8 +8,8 @@ import (
 
 	"config"
 
-	entraid "github.com/redis-developer/go-redis-entraid"
-	"github.com/redis-developer/go-redis-entraid/identity"
+	entraid "github.com/redis/go-redis-entraid"
+	"github.com/redis/go-redis-entraid/identity"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -57,7 +57,6 @@ func main() {
 		Addrs:                        []string{clusterOpts.Addr},
 		StreamingCredentialsProvider: cp,
 	})
-
 
 	// Test the connection
 	pong, err := redisClient.Ping(ctx).Result()

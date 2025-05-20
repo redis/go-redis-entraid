@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis-developer/go-redis-entraid/manager"
-	"github.com/redis-developer/go-redis-entraid/shared"
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/manager"
+	"github.com/redis/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/token"
 	"github.com/redis/go-redis/v9/auth"
 	"github.com/stretchr/testify/mock"
 )

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis-developer/go-redis-entraid/internal"
-	"github.com/redis-developer/go-redis-entraid/shared"
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/internal"
+	"github.com/redis/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/token"
 )
 
 // entraidTokenManager is a struct that implements the TokenManager interface.

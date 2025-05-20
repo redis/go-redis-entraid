@@ -1,4 +1,4 @@
-module github.com/redis-developer/go-redis-entraid
+module github.com/redis/go-redis-entraid
 
 go 1.18
 

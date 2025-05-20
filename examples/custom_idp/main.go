@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	entraid "github.com/redis-developer/go-redis-entraid"
-	"github.com/redis-developer/go-redis-entraid/manager"
-	"github.com/redis-developer/go-redis-entraid/shared"
-	"github.com/redis-developer/go-redis-entraid/token"
+	entraid "github.com/redis/go-redis-entraid"
+	"github.com/redis/go-redis-entraid/manager"
+	"github.com/redis/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/token"
 	redis "github.com/redis/go-redis/v9"
 )
 

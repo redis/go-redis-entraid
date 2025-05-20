@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	config v0.0.0
-	github.com/redis-developer/go-redis-entraid v0.0.0-00010101000000-000000000000
+	github.com/redis/go-redis-entraid v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.5.3-0.20250519143649-1628b87c162b
 )
 
@@ -27,6 +27,6 @@ require (
 
 replace (
 	config => ../config
-	github.com/redis-developer/go-redis-entraid => ../../../
+	github.com/redis/go-redis-entraid => ../../../
 	github.com/redis/go-redis/v9 => github.com/redis/go-redis/v9 v9.5.3-0.20250519143649-1628b87c162b
 )

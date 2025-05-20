@@ -10,8 +10,8 @@ import (
 
 	"config"
 
-	entraid "github.com/redis-developer/go-redis-entraid"
-	"github.com/redis-developer/go-redis-entraid/identity"
+	entraid "github.com/redis/go-redis-entraid"
+	"github.com/redis/go-redis-entraid/identity"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -44,7 +44,7 @@ import (
     "os"
     "strings"
 
-    "github.com/redis-developer/go-redis-entraid/entraid"
+    "github.com/redis/go-redis-entraid/entraid"
     "github.com/redis/go-redis/v9"
 )
 
@@ -97,7 +97,7 @@ export AZURE_AUTHORITY_HOST="https://login.microsoftonline.com"  # For custom au
 ### Running the Example
 ```bash
 go mod init your-app
-go get github.com/redis-developer/go-redis-entraid
+go get github.com/redis/go-redis-entraid
 go run main.go
 ```
 
@@ -498,10 +498,10 @@ import (
     "strings"
     "time"
 
-    "github.com/redis-developer/go-redis-entraid/entraid"
-    "github.com/redis-developer/go-redis-entraid/entraid/identity"
-    "github.com/redis-developer/go-redis-entraid/entraid/manager"
-    "github.com/redis-developer/go-redis-entraid/entraid/shared"
+    "github.com/redis/go-redis-entraid/entraid"
+    "github.com/redis/go-redis-entraid/entraid/identity"
+    "github.com/redis/go-redis-entraid/entraid/manager"
+    "github.com/redis/go-redis-entraid/entraid/shared"
     "github.com/redis/go-redis/v9"
 )
 
@@ -870,7 +870,7 @@ The library provides several error types that you can check against:
 
 ```go
 // Import the shared package to access error types
-import "github.com/redis-developer/go-redis-entraid/shared"
+import "github.com/redis/go-redis-entraid/shared"
 
 // Available error types:
 var (

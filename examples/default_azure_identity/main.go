@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	entraid "github.com/redis-developer/go-redis-entraid"
-	"github.com/redis-developer/go-redis-entraid/identity"
+	entraid "github.com/redis/go-redis-entraid"
+	"github.com/redis/go-redis-entraid/identity"
 	redis "github.com/redis/go-redis/v9"
 )
 

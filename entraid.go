@@ -1,6 +1,6 @@
 package entraid
 
-import "github.com/redis-developer/go-redis-entraid/shared"
+import "github.com/redis/go-redis-entraid/shared"
 
 // IdentityProvider is an alias for the shared.IdentityProvider interface.
 type IdentityProvider = shared.IdentityProvider

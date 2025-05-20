@@ -7,7 +7,7 @@ import (
 
 	mi "github.com/AzureAD/microsoft-authentication-library-for-go/apps/managedidentity"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/shared"
 )
 
 // ManagedIdentityClient is an interface that defines the methods for a managed identity client.
