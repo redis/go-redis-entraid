@@ -45,17 +45,17 @@ func LoadConfig(configPath string) (*EntraidConfig, error) {
 	file, err := os.Open(configPath)
 	if err != nil {
 		file, err = os.Open("endpoints.json")
-	}
-
-	if err == nil {
-		defer file.Close()
-		decoder := json.NewDecoder(file)
-		err = decoder.Decode(&config.Endpoints)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to open configuration file: %v", err)
 		}
 	}
 
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config.Endpoints)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode configuration file: %v", err)
+	}
 	// Override with environment variables if they exist
 	if envClientID := os.Getenv("AZURE_CLIENT_ID"); envClientID != "" {
 		config.AzureClientID = envClientID
