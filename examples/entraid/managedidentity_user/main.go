@@ -38,14 +38,20 @@ func main() {
 	}
 
 	// Create Redis client with streaming credentials provider
-	redisClient := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:                        []string{cfg.Endpoints["standalone-entraid-acl"].Endpoints[0]},
-		StreamingCredentialsProvider: cp,
-	})
+	opts, err := redis.ParseURL(cfg.Endpoints["standalone-entraid-acl"].Endpoints[0])
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+	opts.StreamingCredentialsProvider = cp
+	redisClient := redis.NewClient(opts)
 
 	// Create second Redis client for cluster
+	clusterOpts, err := redis.ParseURL(cfg.Endpoints["cluster-entraid-acl"].Endpoints[0])
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
 	clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:                        cfg.Endpoints["cluster-entraid-acl"].Endpoints,
+		Addrs:                        []string{clusterOpts.Addr},
 		StreamingCredentialsProvider: cp,
 	})
 

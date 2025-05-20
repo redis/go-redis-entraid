@@ -43,10 +43,14 @@ func LoadConfig(configPath string) (*EntraidConfig, error) {
 	}
 
 	file, err := os.Open(configPath)
+	if err != nil {
+		file, err = os.Open("endpoints.json")
+	}
+
 	if err == nil {
 		defer file.Close()
 		decoder := json.NewDecoder(file)
-		err = decoder.Decode(config)
+		err = decoder.Decode(&config.Endpoints)
 		if err != nil {
 			return nil, err
 		}
