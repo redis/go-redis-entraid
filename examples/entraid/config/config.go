@@ -2,8 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"os"
 	"fmt"
+	"os"
 	"strings"
 )
 

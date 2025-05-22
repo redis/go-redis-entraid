@@ -29,7 +29,7 @@ func main() {
 		ConfidentialIdentityProviderOptions: identity.ConfidentialIdentityProviderOptions{
 			ClientID:        cfg.AzureClientID,
 			ClientSecret:    cfg.AzureClientSecret,
-			CredentialsType: "Certificate",
+			CredentialsType: identity.ClientCertificateCredentialType,
 			Authority: identity.AuthorityConfiguration{
 				AuthorityType: identity.AuthorityTypeMultiTenant,
 				TenantID:      cfg.AzureTenantID,
