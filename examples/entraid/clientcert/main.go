@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"log"
@@ -21,7 +23,7 @@ func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig(os.Getenv("REDIS_ENDPOINTS_CONFIG_PATH"))
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Printf("Failed to load config: %v", err)
 	}
 
 	// Create a confidential identity credentials provider with certificate authentication
@@ -36,11 +38,11 @@ func main() {
 			},
 			Scopes:           cfg.GetRedisScopes(),
 			ClientCert:       parseCertificates(cfg.AzureCert),
-			ClientPrivateKey: []byte(cfg.AzurePrivateKey),
+			ClientPrivateKey: parsePrivateKey(cfg.AzurePrivateKey),
 		},
 	})
 	if err != nil {
-		log.Fatalf("Failed to create credentials provider: %v", err)
+		log.Printf("Failed to create credentials provider: %v", err)
 	}
 
 	// Create Redis client with streaming credentials provider
@@ -102,21 +104,57 @@ func main() {
 	fmt.Printf("Retrieved value from cluster: %s\n", clusterVal)
 }
 
+func decodeBase64Pem(pemData string) string {
+	decoded, err := base64.StdEncoding.DecodeString(pemData)
+	if err != nil {
+		log.Fatalf("Failed to decode base64: %v", err)
+	}
+	return string(decoded)
+}
+
+func parsePrivateKey(base64data string) *rsa.PrivateKey {
+	var privateKey *rsa.PrivateKey
+	var err error
+	decoded := decodeBase64Pem(base64data)
+	pk, err := x509.ParsePKCS8PrivateKey([]byte(decoded))
+	if err != nil {
+		log.Printf("Failed to parse pkcs8 key: %v", err)
+	}
+	privateKey, _ = pk.(*rsa.PrivateKey)
+	if privateKey == nil {
+		pk, err = x509.ParsePKCS1PrivateKey([]byte(decoded))
+		if err != nil {
+			log.Printf("Failed to parse pkcs1 key: %v", err)
+		}
+		privateKey, _ = pk.(*rsa.PrivateKey)
+	}
+	return privateKey
+}
+
 func parseCertificates(pemData string) []*x509.Certificate {
 	var certs []*x509.Certificate
+	decoded := decodeBase64Pem(pemData)
 	for {
-		block, rest := pem.Decode([]byte(pemData))
+		block, rest := pem.Decode([]byte(decoded))
 		if block == nil {
 			break
 		}
 		if block.Type == "CERTIFICATE" {
 			cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
-				log.Fatalf("Failed to parse certificate: %v", err)
+				log.Printf("Failed to parse certificate: %v", err)
 			}
 			certs = append(certs, cert)
 		}
-		pemData = string(rest)
+		decoded = string(rest)
+	}
+	if len(certs) == 0 {
+		decoded := decodeBase64Pem(pemData)
+		cert, err := x509.ParseCertificate([]byte(decoded))
+		if err != nil {
+			log.Printf("Failed to parse certificate: %v", err)
+		}
+		certs = append(certs, cert)
 	}
 	return certs
 }
