@@ -1,4 +1,4 @@
-module managedidentity_system
+module managedidentity_systemassigned
 
 go 1.23.4
 

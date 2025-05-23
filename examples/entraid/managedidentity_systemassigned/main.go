@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"config"
 
 	entraid "github.com/redis/go-redis-entraid"
 	"github.com/redis/go-redis-entraid/identity"
+	"github.com/redis/go-redis-entraid/manager"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -24,6 +26,12 @@ func main() {
 
 	// Create a managed identity credentials provider for system-assigned identity
 	cp, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
+		CredentialsProviderOptions: entraid.CredentialsProviderOptions{
+			TokenManagerOptions: manager.TokenManagerOptions{
+				ExpirationRefreshRatio: 0.001,           // Set to refresh very early
+				LowerRefreshBound:      time.Second * 1, // Set lower bound to 1 second
+			},
+		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
 			// For system-assigned identity, we don't need to specify ClientID
 			Scopes:              cfg.GetRedisScopes(),
@@ -91,4 +99,33 @@ func main() {
 		log.Fatalf("Failed to get test key from cluster: %v", err)
 	}
 	fmt.Printf("Retrieved value from cluster: %s\n", clusterVal)
+
+	// Wait for token to expire
+	fmt.Println("Waiting for token to expire...")
+	time.Sleep(3 * time.Second)
+
+	// Test token refresh by retrying operations
+	fmt.Println("Testing token refresh...")
+
+	// Retry standalone operations
+	for i := 0; i < 3; i++ {
+		pong, err = redisClient.Ping(ctx).Result()
+		if err != nil {
+			log.Printf("Failed to ping Redis (attempt %d): %v", i+1, err)
+			continue
+		}
+		fmt.Printf("Successfully pinged Redis standalone after token refresh: %s\n", pong)
+		break
+	}
+
+	// Retry cluster operations
+	for i := 0; i < 3; i++ {
+		clusterPong, err = clusterClient.Ping(ctx).Result()
+		if err != nil {
+			log.Printf("Failed to ping Redis cluster (attempt %d): %v", i+1, err)
+			continue
+		}
+		fmt.Printf("Successfully pinged Redis cluster after token refresh: %s\n", clusterPong)
+		break
+	}
 }
