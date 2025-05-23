@@ -38,6 +38,7 @@ override:
 exclude:
   # Exclude files or packages matching their paths
   paths:
+    - ^examples
     - \.pb\.go$    # excludes all protobuf generated files
     - ^pkg/bar     # exclude package `pkg/bar`
 
