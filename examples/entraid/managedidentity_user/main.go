@@ -28,8 +28,8 @@ func main() {
 			ClientID: cfg.AzureClientID,
 		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-			ManagedIdentityType:  "UserAssigned",
-			UserAssignedClientID: cfg.AzureUserAssignedManagedID,
+			ManagedIdentityType:  identity.UserAssignedObjectID,
+			UserAssignedObjectID: cfg.AzureUserAssignedManagedID,
 			Scopes:               cfg.GetRedisScopes(),
 		},
 	})

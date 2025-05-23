@@ -16,8 +16,8 @@ func TestConstants(t *testing.T) {
 			expected: "SystemAssigned",
 		},
 		{
-			name:     "UserAssignedIdentity",
-			got:      UserAssignedIdentity,
+			name:     "UserAssignedObjectID",
+			got:      UserAssignedObjectID,
 			expected: "UserAssigned",
 		},
 		{

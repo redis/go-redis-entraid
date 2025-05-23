@@ -178,7 +178,7 @@ graph TD
     B -->|Yes| C{System Assigned?}
     B -->|No| D{Client Credentials?}
     C -->|Yes| E[SystemAssignedIdentity]
-    C -->|No| F[UserAssignedIdentity]
+    C -->|No| F[UserAssignedObjectID]
     D -->|Yes| G{Client Secret?}
     D -->|No| H[DefaultAzureIdentity]
     G -->|Yes| I[ClientSecret]
@@ -276,10 +276,10 @@ Options for managed identity authentication:
 ```go
 type ManagedIdentityProviderOptions struct {
     // Required: Type of managed identity
-    ManagedIdentityType ManagedIdentityType // SystemAssignedIdentity or UserAssignedIdentity
+    ManagedIdentityType ManagedIdentityType // SystemAssignedIdentity or UserAssignedObjectID
 
     // Optional: Client ID for user-assigned identity
-    UserAssignedClientID string
+    UserAssignedObjectID string
 
     // Optional: Scopes for token access
     // Default: ["https://redis.azure.com/.default"]
@@ -426,8 +426,8 @@ provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedId
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
     },
     ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-        ManagedIdentityType: identity.UserAssignedIdentity,
-        UserAssignedClientID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
+        ManagedIdentityType: identity.UserAssignedObjectID,
+        UserAssignedObjectID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
         Scopes: []string{"https://redis.azure.com/.default"},
     },
 })

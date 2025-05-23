@@ -30,8 +30,8 @@ func TestNewManagedIdentityCredentialsProvider(t *testing.T) {
 					},
 				},
 				ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-					UserAssignedClientID: "test-client-id",
-					ManagedIdentityType:  identity.UserAssignedIdentity,
+					UserAssignedObjectID: "test-client-id",
+					ManagedIdentityType:  identity.UserAssignedObjectID,
 					Scopes:               []string{identity.RedisScopeDefault},
 				},
 			},
@@ -277,8 +277,8 @@ func TestCredentialsProviderInterface(t *testing.T) {
 						},
 					},
 					ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-						UserAssignedClientID: "test-client-id",
-						ManagedIdentityType:  identity.UserAssignedIdentity,
+						UserAssignedObjectID: "test-client-id",
+						ManagedIdentityType:  identity.UserAssignedObjectID,
 						Scopes:               []string{identity.RedisScopeDefault},
 					},
 				}
@@ -392,8 +392,8 @@ func TestNewManagedIdentityCredentialsProvider_TokenManagerFactoryError(t *testi
 			},
 		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-			UserAssignedClientID: "test-client-id",
-			ManagedIdentityType:  identity.UserAssignedIdentity,
+			UserAssignedObjectID: "test-client-id",
+			ManagedIdentityType:  identity.UserAssignedObjectID,
 			Scopes:               []string{identity.RedisScopeDefault},
 		},
 	}
@@ -470,8 +470,8 @@ func TestNewManagedIdentityCredentialsProvider_TokenManagerStartError(t *testing
 			},
 		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-			UserAssignedClientID: "test-client-id",
-			ManagedIdentityType:  identity.UserAssignedIdentity,
+			UserAssignedObjectID: "test-client-id",
+			ManagedIdentityType:  identity.UserAssignedObjectID,
 			Scopes:               []string{identity.RedisScopeDefault},
 		},
 	}
