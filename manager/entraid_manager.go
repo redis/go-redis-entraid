@@ -237,13 +237,6 @@ func (e *entraidTokenManager) stop() (err error) {
 // It returns the duration to the next token renewal based on the expiration refresh ratio and the lower bound duration.
 // If the token is nil, it returns 0.
 // If the time till expiration is less than the lower bound duration, it returns 0 to renew the token now.
-//
-// This is an optimized version that uses minimal operations
-// and integer math for maximum performance, matching the logic of durationToRenewal.
-// It calculates the duration until the next token renewal based on:
-// 1. The token's TTL (in milliseconds) and expiration refresh ratio
-// 2. The lower bound duration for refresh
-// 3. The current time and token's expiration time
 func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 	// Fast path: nil token check
 	if t == nil {
@@ -272,14 +265,16 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 		return 0
 	}
 
-	ttlMillis := t.TTL() // Already in milliseconds
-	// let's not lose the precision here, examples use 0.001, which would be lost with integer math
+	// Calculate refresh time using integer math with higher precision
+	// example tests use 0.001, which would be lost with lower precision
 	// Example:
 	// ttlMillis = 10000
 	// e.expirationRefreshRatio = 0.001
-	//   - with int math: 10000 * (0.001*100) = 0ms
-	//   - with float math: 10000 * 0.001 = 10ms
-	refreshMillis := int64(float64(ttlMillis) * e.expirationRefreshRatio)
+	//   - with int math and 100 precision: 10000 * (0.001*100) = 0ms
+	//   - with int math and 10000 precision: 10000 * (0.001*10000) = 100ms
+	ttlMillis := t.TTL() // Already in milliseconds
+	refreshRationInt := int64(e.expirationRefreshRatio * 10000)
+	refreshMillis := ttlMillis * refreshRationInt / 10000
 	refreshTimeMillis := t.ReceivedAt().UnixMilli() + refreshMillis
 
 	// Calculate time until refresh
