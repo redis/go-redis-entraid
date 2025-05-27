@@ -307,7 +307,7 @@ func TestIdentityProvider(t *testing.T) {
 func TestIdentityProviderResponseParser(t *testing.T) {
 	now := time.Now()
 	expires := now.Add(time.Hour)
-	testToken := token.New("test-user", "test-password", "test-token", expires, now, int64(time.Hour.Seconds()))
+	testToken := token.New("test-user", "test-password", "test-token", expires, now, time.Hour.Milliseconds())
 
 	tests := []struct {
 		name      string

@@ -11,6 +11,7 @@ var _ auth.Credentials = (*Token)(nil)
 
 // New creates a new token with the specified username, password, raw token, expiration time, received at time, and time to live.
 // NOTE: This won't do any validation on the token, expiresOn, receivedAt, or ttl. It will simply create a new token instance.
+// ttl is in milliseconds.
 func New(username, password, rawToken string, expiresOn, receivedAt time.Time, ttl int64) *Token {
 	return &Token{
 		username:   username,

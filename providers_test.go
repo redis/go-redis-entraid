@@ -72,7 +72,7 @@ func TestNewManagedIdentityCredentialsProvider(t *testing.T) {
 				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			)
 
 			// Set the token manager factory in the options
@@ -157,7 +157,7 @@ func TestNewConfidentialCredentialsProvider(t *testing.T) {
 				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			)
 
 			// Set the token manager factory in the options
@@ -230,7 +230,7 @@ func TestNewDefaultAzureCredentialsProvider(t *testing.T) {
 				rawTokenString,
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			)
 
 			// Set the token manager factory in the options
@@ -290,7 +290,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
-					int64(time.Hour.Seconds()),
+					time.Hour.Milliseconds(),
 				)
 
 				// Set the token manager factory in the options
@@ -326,7 +326,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
-					int64(time.Hour),
+					time.Hour.Milliseconds(),
 				)
 
 				// Set the token manager factory in the options
@@ -358,7 +358,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 					rawTokenString,
 					time.Now().Add(time.Hour),
 					time.Now(),
-					int64(time.Hour),
+					time.Hour.Milliseconds(),
 				)
 
 				// Set the token manager factory in the options
@@ -483,7 +483,7 @@ func TestNewManagedIdentityCredentialsProvider_TokenManagerStartError(t *testing
 		rawTokenString,
 		time.Now().Add(time.Hour),
 		time.Now(),
-		int64(time.Hour),
+		time.Hour.Milliseconds(),
 	)
 
 	// Create a mock token manager that returns an error on Start
@@ -527,7 +527,7 @@ func TestNewConfidentialCredentialsProvider_TokenManagerStartError(t *testing.T)
 		rawTokenString,
 		time.Now().Add(time.Hour),
 		time.Now(),
-		int64(time.Hour),
+		time.Hour.Milliseconds(),
 	)
 
 	// Create a mock token manager that returns an error on Start
@@ -567,7 +567,7 @@ func TestNewDefaultAzureCredentialsProvider_TokenManagerStartError(t *testing.T)
 		rawTokenString,
 		time.Now().Add(time.Hour),
 		time.Now(),
-		int64(time.Hour),
+		time.Hour.Milliseconds(),
 	)
 
 	// Create a mock token manager that returns an error on Start

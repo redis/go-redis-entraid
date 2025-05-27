@@ -117,7 +117,7 @@ func TestCredentialsProviderWithMockIdentityProvider(t *testing.T) {
 				"test-token",
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			),
 		}
 
@@ -159,7 +159,7 @@ func TestCredentialsProviderWithMockIdentityProvider(t *testing.T) {
 				"test-token",
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			),
 		}
 
@@ -219,7 +219,7 @@ func TestCredentialsProviderWithMockIdentityProvider(t *testing.T) {
 				"initial-token",
 				time.Now().Add(time.Hour),
 				time.Now(),
-				int64(time.Hour),
+				time.Hour.Milliseconds(),
 			),
 		}
 
@@ -253,7 +253,7 @@ func TestCredentialsProviderWithMockIdentityProvider(t *testing.T) {
 			"updated-token",
 			time.Now().Add(time.Hour),
 			time.Now(),
-			int64(time.Hour),
+			time.Hour.Milliseconds(),
 		)
 		tm.lock.Unlock()
 
@@ -329,7 +329,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			rawTokenString,
 			time.Now().Add(tokenExpiration),
 			time.Now(),
-			int64(tokenExpiration),
+			tokenExpiration.Milliseconds(),
 		)
 
 		listener := &mockCredentialsListener{
@@ -386,7 +386,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			rawTokenString,
 			time.Now().Add(tokenExpiration),
 			time.Now(),
-			int64(tokenExpiration),
+			tokenExpiration.Milliseconds(),
 		)
 		mtm := &mockTokenManager{done: make(chan struct{})}
 		// Set the token manager factory in the options
@@ -514,7 +514,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			rawTokenString,
 			time.Now().Add(tokenExpiration),
 			time.Now(),
-			int64(tokenExpiration),
+			tokenExpiration.Milliseconds(),
 		)
 		// Set the token manager factory in the options
 		options := opts

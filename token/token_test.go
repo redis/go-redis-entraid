@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	t.Parallel()
 	expiration := time.Now().Add(1 * time.Hour)
 	receivedAt := time.Now()
-	ttl := expiration.Unix() - receivedAt.Unix()
+	ttl := expiration.UnixMilli() - receivedAt.UnixMilli()
 	token := New("username", "password", "rawToken", expiration, receivedAt, ttl)
 	assert.Equal(t, "username", token.username)
 	assert.Equal(t, "password", token.password)
@@ -29,7 +29,7 @@ func TestBasicAuth(t *testing.T) {
 	rawToken := fmt.Sprintf("%s:%s", username, password)
 	expiration := time.Now().Add(1 * time.Hour)
 	receivedAt := time.Now()
-	ttl := expiration.Unix() - receivedAt.Unix()
+	ttl := expiration.UnixMilli() - receivedAt.UnixMilli()
 	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	baUsername, baPassword := token.BasicAuth()
 	assert.Equal(t, username, baUsername)
@@ -43,7 +43,7 @@ func TestRawCredentials(t *testing.T) {
 	rawToken := fmt.Sprintf("%s:%s", username, password)
 	expiration := time.Now().Add(1 * time.Hour)
 	receivedAt := time.Now()
-	ttl := expiration.Unix() - receivedAt.Unix()
+	ttl := expiration.UnixMilli() - receivedAt.UnixMilli()
 	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	rawCredentials := token.RawCredentials()
 	assert.Equal(t, rawToken, rawCredentials)
@@ -58,7 +58,7 @@ func TestExpirationOn(t *testing.T) {
 	rawToken := fmt.Sprintf("%s:%s", username, password)
 	expiration := time.Now().Add(1 * time.Hour)
 	receivedAt := time.Now()
-	ttl := expiration.Unix() - receivedAt.Unix()
+	ttl := expiration.UnixMilli() - receivedAt.UnixMilli()
 	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	expirationOn := token.ExpirationOn()
 	assert.True(t, expirationOn.After(time.Now()))
@@ -72,14 +72,14 @@ func TestTokenTTL(t *testing.T) {
 	rawToken := fmt.Sprintf("%s:%s", username, password)
 	expiration := time.Now().Add(1 * time.Hour)
 	receivedAt := time.Now()
-	ttl := expiration.Unix() - receivedAt.Unix()
+	ttl := expiration.UnixMilli() - receivedAt.UnixMilli()
 	token := New(username, password, rawToken, expiration, receivedAt, ttl)
 	assert.Equal(t, ttl, token.TTL())
 }
 
 func TestCopyToken(t *testing.T) {
 	t.Parallel()
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	token := New("username", "password", "rawToken", time.Now(), time.Now(), time.Hour.Milliseconds())
 	copiedToken := copyToken(token)
 
 	assert.Equal(t, token.username, copiedToken.username)
@@ -108,7 +108,7 @@ func TestTokenReceivedAt(t *testing.T) {
 	t.Parallel()
 	// Create a token with a specific receivedAt time
 	receivedAt := time.Now()
-	token := New("username", "password", "rawToken", time.Now(), receivedAt, 3600)
+	token := New("username", "password", "rawToken", time.Now(), receivedAt, time.Hour.Milliseconds())
 
 	assert.True(t, token.receivedAt.After(time.Now().Add(-1*time.Hour)))
 	assert.True(t, token.receivedAt.Before(time.Now().Add(1*time.Hour)))
@@ -133,12 +133,12 @@ func BenchmarkNew(b *testing.B) {
 	now := time.Now()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New("username", "password", "rawToken", now, now, 3600)
+		New("username", "password", "rawToken", now, now, time.Hour.Milliseconds())
 	}
 }
 
 func BenchmarkBasicAuth(b *testing.B) {
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	token := New("username", "password", "rawToken", time.Now(), time.Now(), time.Hour.Milliseconds())
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		token.BasicAuth()
@@ -146,7 +146,7 @@ func BenchmarkBasicAuth(b *testing.B) {
 }
 
 func BenchmarkRawCredentials(b *testing.B) {
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	token := New("username", "password", "rawToken", time.Now(), time.Now(), time.Hour.Milliseconds())
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		token.RawCredentials()
@@ -154,7 +154,7 @@ func BenchmarkRawCredentials(b *testing.B) {
 }
 
 func BenchmarkExpirationOn(b *testing.B) {
-	token := New("username", "password", "rawToken", time.Now().Add(1*time.Hour), time.Now(), 3600)
+	token := New("username", "password", "rawToken", time.Now().Add(1*time.Hour), time.Now(), time.Hour.Milliseconds())
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		token.ExpirationOn()
@@ -162,7 +162,7 @@ func BenchmarkExpirationOn(b *testing.B) {
 }
 
 func BenchmarkCopyToken(b *testing.B) {
-	token := New("username", "password", "rawToken", time.Now(), time.Now(), 3600)
+	token := New("username", "password", "rawToken", time.Now(), time.Now(), time.Hour.Milliseconds())
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		token.Copy()

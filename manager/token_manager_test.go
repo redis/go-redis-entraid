@@ -805,10 +805,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		token1 := token.New(
 			"test",
 			"test",
-			"test",
+			"debug",
 			expiresOn,
 			time.Now(),
-			int64(time.Until(expiresOn)),
+			time.Until(expiresOn).Milliseconds(),
 		)
 
 		mParser.On("ParseResponse", idpResponse).Return(token1, nil).Once()
@@ -820,6 +820,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal / 10)
@@ -995,6 +997,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1048,6 +1052,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal + 100*time.Millisecond)
@@ -1100,6 +1106,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		<-time.After(toRenewal + 100*time.Millisecond)
@@ -1173,6 +1181,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, tm.listener)
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1249,6 +1259,9 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+
+		<-time.After(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1444,33 +1457,25 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						select {
 						case tokenCh <- t:
 						default:
-							// Channel full, ignore
 						}
 					},
 					onErrorFunc: func(err error) {
 						select {
 						case errorCh <- err:
 						default:
-							// Channel full, ignore
 						}
 					},
 				}
 
 				// Choose operation based on a pattern
-				// Using modulo for a deterministic pattern that exercises all operations
 				opType := j % 3
-
-				// t.Logf("Goroutine %d, Operation %d: Performing operation type %d", routineID, j, opType)
 
 				switch opType {
 				case 0:
-					// Start the token manager with a new listener
-					// t.Logf("Goroutine %d, Operation %d: Attempting to start token manager", routineID, j)
 					closeFunc, err := tm.Start(listener)
 
 					if err != nil {
 						if err != ErrTokenManagerAlreadyStarted {
-							// t.Logf("Goroutine %d, Operation %d: Start failed with error: %v", routineID, j, err)
 							select {
 							case errorCh <- fmt.Errorf("failed to start token manager: %w", err):
 							default:
@@ -1480,70 +1485,45 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						continue
 					}
 
-					// t.Logf("Goroutine %d, Operation %d: Successfully started token manager", routineID, j)
-					// Store the closer for later cleanup
 					closerKey := fmt.Sprintf("closer-%d-%d", routineID, j)
 					closers.Store(closerKey, closeFunc)
 
-					// Simulate some work
 					time.Sleep(time.Duration(500-rand.Intn(400)) * time.Millisecond)
 
 				case 1:
-					// Get current token
-					//t.Logf("Goroutine %d, Operation %d: Getting token", routineID, j)
 					token, err := tm.GetToken(false)
 					if err != nil {
-						//t.Logf("Goroutine %d, Operation %d: GetToken failed with error: %v", routineID, j, err)
 						select {
 						case errorCh <- fmt.Errorf("failed to get token: %w", err):
 						default:
 							t.Fatalf("Goroutine %d, Operation %d: Failed to get token: %v", routineID, j, err)
 						}
 					} else if token != nil {
-						//t.Logf("Goroutine %d, Operation %d: Successfully got token, expires: %v", routineID, j, token.ExpirationOn())
 						select {
 						case tokenCh <- token:
 						default:
-							// Channel full, ignore
 						}
 					}
 
 				case 2:
-					// Close a previously created token manager listener
-					// This simulates multiple subscriptions being created and destroyed
-					//t.Logf("Goroutine %d, Operation %d: Attempting to close a token manager", routineID, j)
-					closedAny := false
-
 					closers.Range(func(key, value interface{}) bool {
-						if j%10 > 7 { // Only close some of the time based on a pattern
-							closedAny = true
-							//t.Logf("Goroutine %d, Operation %d: Closing token manager with key %v", routineID, j, key)
-
+						if j%10 > 7 {
 							closeFunc := value.(StopFunc)
 							if err := closeFunc(); err != nil {
 								if err != ErrTokenManagerAlreadyStopped {
-									// t.Logf("Goroutine %d, Operation %d: Close failed with error: %v", routineID, j, err)
 									select {
 									case errorCh <- fmt.Errorf("failed to close token manager: %w", err):
 									default:
 										t.Fatalf("Goroutine %d, Operation %d: Failed to close token manager: %v", routineID, j, err)
 									}
-								} else {
-									//t.Logf("Goroutine %d, Operation %d: TokenManager was already stopped",  routineID, j)
 								}
-							} else {
-								// t.Logf("Goroutine %d, Operation %d: Successfully closed token manager", routineID, j)
 							}
 
 							closers.Delete(key)
-							return false // stop after finding one to close
+							return false
 						}
 						return true
 					})
-
-					if !closedAny {
-						//t.Logf("Goroutine %d, Operation %d: No token manager to close or condition not met",  routineID, j)
-					}
 				}
 			}
 		}(i)
@@ -1558,8 +1538,6 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	// Use a timeout to detect deadlocks
 	select {
 	case <-doneCh:
-		// All operations completed successfully
-		t.Log("All concurrent operations completed successfully")
 	case <-time.After(30 * time.Second):
 		t.Fatal("test timed out, possible deadlock detected")
 	}
@@ -1618,14 +1596,6 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	totalOps := startCount + getTokenCount + closeCount
 	expectedOps := int32(numGoroutines * numConcurrentOps)
 
-	// Report operation counts
-	t.Logf("Concurrent test summary:")
-	t.Logf("- Total operations executed: %d (expected: %d)", totalOps, expectedOps)
-	t.Logf("- Start operations: %d (with %d errors)", startCount, len(startErrors))
-	t.Logf("- GetToken operations: %d (with %d errors, %d successful)",
-		getTokenCount, len(getTokenErrors), len(tokens))
-	t.Logf("- Close operations: %d (with %d errors)", closeCount, len(closeErrors))
-
 	// Some errors are expected due to concurrent operations
 	// but we should have received tokens successfully
 	assert.Equal(t, expectedOps, totalOps, "All operations should be accounted for")
@@ -1634,7 +1604,6 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	// Verify the token manager still works after all the concurrent operations
 	finalListener := &concurrentTestTokenListener{
 		onNextFunc: func(t *token.Token) {
-			// Just verify we get a token - don't use assert within this callback
 			if t == nil {
 				panic("Final token should not be nil")
 			}

@@ -3,7 +3,6 @@ package manager
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"os"
 	"time"
@@ -177,6 +176,6 @@ func (*defaultIdentityProviderResponseParser) ParseResponse(response shared.Iden
 		rawToken,
 		expiresOn,
 		now,
-		int64(math.Ceil(time.Until(expiresOn).Seconds())),
+		time.Until(expiresOn).Milliseconds(),
 	), nil
 }
