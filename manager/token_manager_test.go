@@ -820,11 +820,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal / 10)
+		time.Sleep(toRenewal / 10)
 		assert.NotNil(t, tm.listener)
 		assert.NoError(t, stopper())
 		assert.Nil(t, tm.listener)
@@ -832,7 +832,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			close(tm.closedChan)
 		})
 
-		<-time.After(toRenewal)
+		time.Sleep(toRenewal)
 		// already stopped
 		assert.Error(t, stopper())
 		mock.AssertExpectationsForObjects(t, idp, mParser, listener)
@@ -894,7 +894,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		// wait for request token to be called
 		<-done
 		// wait a bit for listener to be notified
-		<-time.After(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		assert.NoError(t, cancel())
 
 		assert.InDelta(t, stop.Sub(start), tm.retryOptions.InitialDelay, float64(200*time.Millisecond))
@@ -946,7 +946,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(time.Duration(tm.retryOptions.InitialDelay / 2))
+		time.Sleep(tm.retryOptions.InitialDelay / 2)
 		assert.NoError(t, cancel())
 		assert.Nil(t, tm.listener)
 		assert.Panics(t, func() {
@@ -997,12 +997,12 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(toRenewal + time.Second)
+		time.Sleep(toRenewal + time.Second)
 
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
@@ -1052,11 +1052,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal + 100*time.Millisecond)
+		time.Sleep(toRenewal + 100*time.Millisecond)
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
@@ -1106,11 +1106,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal + 100*time.Millisecond)
+		time.Sleep(toRenewal + 100*time.Millisecond)
 
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		listener.AssertNumberOfCalls(t, "OnError", 1)
@@ -1181,7 +1181,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, tm.listener)
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
@@ -1260,12 +1260,12 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 
-		<-time.After(time.Millisecond)
+		time.Sleep(time.Millisecond)
 		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(toRenewal + 500*time.Millisecond)
+		time.Sleep(toRenewal + 500*time.Millisecond)
 		assert.Nil(t, cancel())
 
 		select {
@@ -1274,7 +1274,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		case <-tm.closedChan:
 		}
 
-		<-time.After(50 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		// maxAttempts + the initial one
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
