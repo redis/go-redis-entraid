@@ -25,6 +25,7 @@ run_example() {
     fi
     
     pushd "$example_dir" > /dev/null
+    go get github.com/redis/go-redis/v9@master
     go mod tidy
     if ! go run main.go; then
         echo "Error: $example_dir example failed"

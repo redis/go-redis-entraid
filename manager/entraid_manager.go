@@ -237,47 +237,14 @@ func (e *entraidTokenManager) stop() (err error) {
 // It returns the duration to the next token renewal based on the expiration refresh ratio and the lower bound duration.
 // If the token is nil, it returns 0.
 // If the time till expiration is less than the lower bound duration, it returns 0 to renew the token now.
-func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
-	return e.durationToRenewalV5(t)
-	/*
-		if t == nil {
-			return 0
-		}
-		now := time.Now().UTC()
-
-		expirationRefreshTime := t.ReceivedAt().Add(time.Duration(float64(t.TTL()) * float64(time.Millisecond) * e.expirationRefreshRatio))
-		timeTillExpiration := time.Until(t.ExpirationOn())
-
-		// if the expirationRefreshTime is in the past, return 0 to renew the token NOW
-		if expirationRefreshTime.Before(now) {
-			return 0
-		}
-
-		// if the timeTillExpiration is less than the lower bound (or 0), return 0 to renew the token NOW
-		if timeTillExpiration <= e.lowerBoundDuration || timeTillExpiration <= 0 {
-			return 0
-		}
-
-		// Calculate the time to renew the token based on the expiration refresh ratio
-		duration := time.Until(expirationRefreshTime)
-
-		// if the duration will take us past the lower bound, return the duration to lower bound
-		if timeTillExpiration-e.lowerBoundDuration < duration {
-			return timeTillExpiration - e.lowerBoundDuration
-		}
-
-		// return the calculated duration
-		return duration
-	*/
-}
-
-// durationToRenewalV5 is an ultra-optimized version that uses minimal operations
+//
+// This is an optimized version that uses minimal operations
 // and integer math for maximum performance, matching the logic of durationToRenewal.
 // It calculates the duration until the next token renewal based on:
 // 1. The token's TTL (in milliseconds) and expiration refresh ratio
 // 2. The lower bound duration for refresh
 // 3. The current time and token's expiration time
-func (e *entraidTokenManager) durationToRenewalV5(t *token.Token) time.Duration {
+func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 	// Fast path: nil token check
 	if t == nil {
 		return 0
