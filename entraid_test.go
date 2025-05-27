@@ -174,7 +174,6 @@ func (m *mockTokenManager) stop() error {
 	}
 	if m.done != nil {
 		close(m.done)
-		m.done = nil
 	}
 	return nil
 }
@@ -196,6 +195,7 @@ func mockTokenManagerLoop(mtm *mockTokenManager, tokenExpiration time.Duration, 
 			for {
 				select {
 				case <-mtm.done:
+					mtm.done = nil
 					return
 				case <-time.After(tokenExpiration):
 					mtm.lock.Lock()
