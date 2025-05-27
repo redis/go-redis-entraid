@@ -28,6 +28,11 @@ func main() {
 		log.Printf("Failed to load config: %v", err)
 	}
 
+	pk, err := parsePrivateKey(cfg.AzurePrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to parse private key: %v", err)
+	}
+
 	// Create a confidential identity credentials provider with certificate authentication
 	cp, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialCredentialsProviderOptions{
 		CredentialsProviderOptions: entraid.CredentialsProviderOptions{
@@ -46,7 +51,7 @@ func main() {
 			},
 			Scopes:           cfg.GetRedisScopes(),
 			ClientCert:       parseCertificates(cfg.AzureCert),
-			ClientPrivateKey: parsePrivateKey(cfg.AzurePrivateKey),
+			ClientPrivateKey: pk,
 		},
 	})
 	if err != nil {
@@ -149,23 +154,22 @@ func decodeBase64Pem(pemData string) string {
 	return string(decoded)
 }
 
-func parsePrivateKey(base64data string) *rsa.PrivateKey {
+func parsePrivateKey(base64data string) (*rsa.PrivateKey, error) {
 	var privateKey *rsa.PrivateKey
-	var err error
 	decoded := decodeBase64Pem(base64data)
 	pk, err := x509.ParsePKCS8PrivateKey([]byte(decoded))
 	if err != nil {
-		log.Printf("Failed to parse pkcs8 key: %v", err)
+		return nil, fmt.Errorf("failed to parse pkcs8 key: %w", err)
 	}
 	privateKey, _ = pk.(*rsa.PrivateKey)
 	if privateKey == nil {
 		pk, err = x509.ParsePKCS1PrivateKey([]byte(decoded))
 		if err != nil {
-			log.Printf("Failed to parse pkcs1 key: %v", err)
+			return nil, fmt.Errorf("failed to parse pkcs1 key: %w", err)
 		}
 		privateKey, _ = pk.(*rsa.PrivateKey)
 	}
-	return privateKey
+	return privateKey, nil
 }
 
 func parseCertificates(pemData string) []*x509.Certificate {
