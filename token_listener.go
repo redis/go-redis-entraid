@@ -1,8 +1,8 @@
 package entraid
 
 import (
-	"github.com/redis-developer/go-redis-entraid/manager"
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/manager"
+	"github.com/redis/go-redis-entraid/token"
 )
 
 // entraidTokenListener implements the TokenListener interface for the entraidCredentialsProvider.

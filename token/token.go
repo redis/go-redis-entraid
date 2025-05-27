@@ -15,10 +15,10 @@ func New(username, password, rawToken string, expiresOn, receivedAt time.Time, t
 	return &Token{
 		username:   username,
 		password:   password,
+		rawToken:   rawToken,
 		expiresOn:  expiresOn,
 		receivedAt: receivedAt,
 		ttl:        ttl,
-		rawToken:   rawToken,
 	}
 }
 

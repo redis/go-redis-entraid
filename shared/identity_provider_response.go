@@ -5,8 +5,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
-	"github.com/redis-developer/go-redis-entraid/internal"
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/internal"
+	"github.com/redis/go-redis-entraid/token"
 )
 
 const (

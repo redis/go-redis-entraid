@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

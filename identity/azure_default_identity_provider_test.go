@@ -6,7 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

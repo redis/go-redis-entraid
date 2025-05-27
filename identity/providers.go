@@ -5,8 +5,8 @@ package identity
 const (
 	// SystemAssignedIdentity is the type of identity that is automatically managed by Azure.
 	SystemAssignedIdentity = "SystemAssigned"
-	// UserAssignedIdentity is the type of identity that is managed by the user.
-	UserAssignedIdentity = "UserAssigned"
+	// UserAssignedObjectID is the type of identity that is managed by the user.
+	UserAssignedObjectID = "UserAssignedObjectID"
 
 	// ClientSecretCredentialType is the type of credentials that uses a client secret to authenticate.
 	ClientSecretCredentialType = "ClientSecret"

@@ -44,7 +44,7 @@ import (
     "os"
     "strings"
 
-    "github.com/redis-developer/go-redis-entraid/entraid"
+    "github.com/redis/go-redis-entraid/entraid"
     "github.com/redis/go-redis/v9"
 )
 
@@ -97,7 +97,7 @@ export AZURE_AUTHORITY_HOST="https://login.microsoftonline.com"  # For custom au
 ### Running the Example
 ```bash
 go mod init your-app
-go get github.com/redis-developer/go-redis-entraid
+go get github.com/redis/go-redis-entraid
 go run main.go
 ```
 
@@ -178,7 +178,7 @@ graph TD
     B -->|Yes| C{System Assigned?}
     B -->|No| D{Client Credentials?}
     C -->|Yes| E[SystemAssignedIdentity]
-    C -->|No| F[UserAssignedIdentity]
+    C -->|No| F[UserAssignedObjectID]
     D -->|Yes| G{Client Secret?}
     D -->|No| H[DefaultAzureIdentity]
     G -->|Yes| I[ClientSecret]
@@ -276,10 +276,10 @@ Options for managed identity authentication:
 ```go
 type ManagedIdentityProviderOptions struct {
     // Required: Type of managed identity
-    ManagedIdentityType ManagedIdentityType // SystemAssignedIdentity or UserAssignedIdentity
+    ManagedIdentityType ManagedIdentityType // SystemAssignedIdentity or UserAssignedObjectID
 
     // Optional: Client ID for user-assigned identity
-    UserAssignedClientID string
+    UserAssignedObjectID string
 
     // Optional: Scopes for token access
     // Default: ["https://redis.azure.com/.default"]
@@ -411,10 +411,10 @@ authority := identity.AuthorityConfiguration{
 ```go
 // Create provider for system assigned identity
 provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-        ClientID: os.Getenv("AZURE_CLIENT_ID"),
+    ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+        ManagedIdentityType: identity.SystemAssignedIdentity,
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
-    ManagedIdentityType: identity.SystemAssignedIdentity,
 })
 ```
 
@@ -425,23 +425,27 @@ provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedId
     CredentialsProviderOptions: entraid.CredentialsProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
     },
-    ManagedIdentityType: identity.UserAssignedIdentity,
-    UserAssignedClientID: os.Getenv("USER_ASSIGNED_CLIENT_ID"),
+    ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+        ManagedIdentityType: identity.UserAssignedObjectID,
+        UserAssignedObjectID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
+        Scopes: []string{"https://redis.azure.com/.default"},
+    },
 })
 ```
 
 ### Client Secret Authentication
 ```go
 // Create provider for client secret authentication
-provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialIdentityProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
+provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialCredentialsProviderOptions{
+    ConfidentialIdentityProviderOptions: identity.ConfidentialIdentityProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
-    },
-    CredentialsType: identity.ClientSecretCredentialType,
-    ClientSecret: os.Getenv("AZURE_CLIENT_SECRET"),
-    Authority: identity.AuthorityConfiguration{
-        AuthorityType: identity.AuthorityTypeDefault,
-        TenantID: os.Getenv("AZURE_TENANT_ID"),
+        ClientSecret: os.Getenv("AZURE_CLIENT_SECRET"),
+        CredentialsType: identity.ClientSecretCredentialType,
+        Authority: identity.AuthorityConfiguration{
+            AuthorityType: identity.AuthorityTypeMultiTenant,
+            TenantID: os.Getenv("AZURE_TENANT_ID"),
+        },
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
 })
 ```
@@ -454,16 +458,27 @@ if err != nil {
     log.Fatal(err)
 }
 
-provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialIdentityProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
+provider, err := entraid.NewConfidentialCredentialsProvider(entraid.ConfidentialCredentialsProviderOptions{
+    ConfidentialIdentityProviderOptions: identity.ConfidentialIdentityProviderOptions{
         ClientID: os.Getenv("AZURE_CLIENT_ID"),
+        CredentialsType: identity.ClientCertificateCredentialType,
+        Authority: identity.AuthorityConfiguration{
+            AuthorityType: identity.AuthorityTypeMultiTenant,
+            TenantID: os.Getenv("AZURE_TENANT_ID"),
+        },
+        Scopes: []string{"https://redis.azure.com/.default"},
+        ClientCert: []*x509.Certificate{cert.Leaf},
+        ClientPrivateKey: cert.PrivateKey,
     },
-    CredentialsType: identity.ClientCertificateCredentialType,
-    ClientCert: []*x509.Certificate{cert.Leaf},
-    ClientPrivateKey: cert.PrivateKey,
-    Authority: identity.AuthorityConfiguration{
-        AuthorityType: identity.AuthorityTypeDefault,
-        TenantID: os.Getenv("AZURE_TENANT_ID"),
+})
+```
+
+### Default Azure Identity
+```go
+// Create a default credentials provider
+provider, err := entraid.NewDefaultAzureCredentialsProvider(entraid.DefaultAzureCredentialsProviderOptions{
+    DefaultAzureIdentityProviderOptions: identity.DefaultAzureIdentityProviderOptions{
+        Scopes: []string{"https://redis.azure.com/.default"},
     },
 })
 ```
@@ -483,10 +498,10 @@ import (
     "strings"
     "time"
 
-    "github.com/redis-developer/go-redis-entraid/entraid"
-    "github.com/redis-developer/go-redis-entraid/entraid/identity"
-    "github.com/redis-developer/go-redis-entraid/entraid/manager"
-    "github.com/redis-developer/go-redis-entraid/entraid/shared"
+    "github.com/redis/go-redis-entraid/entraid"
+    "github.com/redis/go-redis-entraid/entraid/identity"
+    "github.com/redis/go-redis-entraid/entraid/manager"
+    "github.com/redis/go-redis-entraid/entraid/shared"
     "github.com/redis/go-redis/v9"
 )
 
@@ -855,7 +870,7 @@ The library provides several error types that you can check against:
 
 ```go
 // Import the shared package to access error types
-import "github.com/redis-developer/go-redis-entraid/shared"
+import "github.com/redis/go-redis-entraid/shared"
 
 // Available error types:
 var (

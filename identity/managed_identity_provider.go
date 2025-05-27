@@ -7,7 +7,7 @@ import (
 
 	mi "github.com/AzureAD/microsoft-authentication-library-for-go/apps/managedidentity"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/shared"
 )
 
 // ManagedIdentityClient is an interface that defines the methods for a managed identity client.
@@ -21,11 +21,11 @@ type ManagedIdentityClient interface {
 // ManagedIdentityProviderOptions represents the options for the managed identity provider.
 // It is used to configure the identity provider when requesting a token.
 type ManagedIdentityProviderOptions struct {
-	// UserAssignedClientID is the client ID of the user assigned identity.
+	// UserAssignedObjectID is the object ID that is used to identify the user assigned identity.
 	// This is used to identify the identity when requesting a token.
-	UserAssignedClientID string
+	UserAssignedObjectID string
 	// ManagedIdentityType is the type of managed identity.
-	// This can be either SystemAssigned or UserAssigned.
+	// This can be either SystemAssigned or UserAssignedObjectID.
 	ManagedIdentityType string
 	// Scopes is a list of scopes that the identity has access to.
 	// This is used to specify the permissions that the identity has when requesting a token.
@@ -34,12 +34,12 @@ type ManagedIdentityProviderOptions struct {
 
 // ManagedIdentityProvider represents a managed identity provider.
 type ManagedIdentityProvider struct {
-	// userAssignedClientID is the client ID of the user assigned identity.
+	// userAssignedObjectID is the client ID of the user assigned identity.
 	// This is used to identify the identity when requesting a token.
-	userAssignedClientID string
+	userAssignedObjectID string
 
 	// managedIdentityType is the type of managed identity.
-	// This can be either SystemAssigned or UserAssigned.
+	// This can be either SystemAssigned or UserAssignedObjectID.
 	managedIdentityType string
 
 	// scopes is a list of scopes that the identity has access to.
@@ -64,7 +64,7 @@ func (c *realManagedIdentityClient) AcquireToken(ctx context.Context, resource s
 func NewManagedIdentityProvider(opts ManagedIdentityProviderOptions) (*ManagedIdentityProvider, error) {
 	var client ManagedIdentityClient
 
-	if opts.ManagedIdentityType != SystemAssignedIdentity && opts.ManagedIdentityType != UserAssignedIdentity {
+	if opts.ManagedIdentityType != SystemAssignedIdentity && opts.ManagedIdentityType != UserAssignedObjectID {
 		return nil, errors.New("invalid managed identity type")
 	}
 
@@ -78,13 +78,13 @@ func NewManagedIdentityProvider(opts ManagedIdentityProviderOptions) (*ManagedId
 			return nil, fmt.Errorf("couldn't create managed identity client: %w", err)
 		}
 		client = &realManagedIdentityClient{client: miClient}
-	case UserAssignedIdentity:
-		// UserAssignedIdentity is required to be specified when using a user assigned identity.
-		if opts.UserAssignedClientID == "" {
-			return nil, errors.New("user assigned client ID is required when using user assigned identity")
+	case UserAssignedObjectID:
+		// UserAssignedObjectID is required to be specified when using a user assigned identity.
+		if opts.UserAssignedObjectID == "" {
+			return nil, errors.New("user assigned object ID is required when using user assigned identity")
 		}
-		// UserAssignedIdentity is the type of identity that is managed by the user.
-		miClient, err := mi.New(mi.UserAssignedClientID(opts.UserAssignedClientID))
+		// UserAssignedObjectID is the type of identity that is managed by the user.
+		miClient, err := mi.New(mi.UserAssignedObjectID(opts.UserAssignedObjectID))
 		if err != nil {
 			return nil, fmt.Errorf("couldn't create managed identity client: %w", err)
 		}
@@ -92,7 +92,7 @@ func NewManagedIdentityProvider(opts ManagedIdentityProviderOptions) (*ManagedId
 	}
 
 	return &ManagedIdentityProvider{
-		userAssignedClientID: opts.UserAssignedClientID,
+		userAssignedObjectID: opts.UserAssignedObjectID,
 		managedIdentityType:  opts.ManagedIdentityType,
 		scopes:               opts.Scopes,
 		client:               client,

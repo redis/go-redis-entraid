@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/shared"
 )
 
 // ConfidentialIdentityProviderOptions represents the options for the confidential identity provider.

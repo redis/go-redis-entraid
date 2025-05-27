@@ -3,9 +3,9 @@ package entraid
 import (
 	"fmt"
 
-	"github.com/redis-developer/go-redis-entraid/identity"
-	"github.com/redis-developer/go-redis-entraid/manager"
-	"github.com/redis-developer/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/identity"
+	"github.com/redis/go-redis-entraid/manager"
+	"github.com/redis/go-redis-entraid/shared"
 	"github.com/redis/go-redis/v9/auth"
 )
 

@@ -39,8 +39,8 @@ func TestNewManagedIdentityProvider(t *testing.T) {
 		{
 			name: "User assigned identity with client ID",
 			opts: ManagedIdentityProviderOptions{
-				ManagedIdentityType:  UserAssignedIdentity,
-				UserAssignedClientID: "test-client-id",
+				ManagedIdentityType:  UserAssignedObjectID,
+				UserAssignedObjectID: "test-client-id",
 				Scopes:               []string{"https://redis.azure.com"},
 			},
 			expectedError: "",
@@ -48,10 +48,10 @@ func TestNewManagedIdentityProvider(t *testing.T) {
 		{
 			name: "User assigned identity without client ID",
 			opts: ManagedIdentityProviderOptions{
-				ManagedIdentityType: UserAssignedIdentity,
+				ManagedIdentityType: UserAssignedObjectID,
 				Scopes:              []string{"https://redis.azure.com"},
 			},
-			expectedError: "user assigned client ID is required when using user assigned identity",
+			expectedError: "user assigned object ID is required when using user assigned identity",
 		},
 		{
 			name: "Invalid identity type",
@@ -75,7 +75,7 @@ func TestNewManagedIdentityProvider(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
 				assert.Equal(t, tt.opts.ManagedIdentityType, provider.managedIdentityType)
-				assert.Equal(t, tt.opts.UserAssignedClientID, provider.userAssignedClientID)
+				assert.Equal(t, tt.opts.UserAssignedObjectID, provider.userAssignedObjectID)
 				assert.Equal(t, tt.opts.Scopes, provider.scopes)
 				assert.NotNil(t, provider.client)
 			}

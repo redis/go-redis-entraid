@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis-developer/go-redis-entraid/shared"
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/shared"
+	"github.com/redis/go-redis-entraid/token"
 )
 
 // TokenManagerOptions is a struct that contains the options for the TokenManager.

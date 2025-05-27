@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis-developer/go-redis-entraid/token"
+	"github.com/redis/go-redis-entraid/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
