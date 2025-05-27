@@ -50,7 +50,7 @@ type FakeIdentityProvider struct {
 
 // RequestToken simulates a request to an identity provider and returns a fake token.
 // In a real implementation, this would involve making a network request to the identity provider.
-func (f *FakeIdentityProvider) RequestToken() (entraid.IdentityProviderResponse, error) {
+func (f *FakeIdentityProvider) RequestToken(_ context.Context) (entraid.IdentityProviderResponse, error) {
 	// Simulate a successful token request
 	return shared.NewIDPResponse(
 		shared.ResponseTypeRawToken,
@@ -72,7 +72,10 @@ type fakeIdentityProviderResponseParser struct {
 // ParseResponse simulates the parsing of a response from an identity provider.
 func (f *fakeIdentityProviderResponseParser) ParseResponse(response entraid.IdentityProviderResponse) (*token.Token, error) {
 	if response.Type() == shared.ResponseTypeRawToken {
-		rawToken := response.RawToken()
+		rawToken, err := response.RawToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get raw token: %w", err)
+		}
 		username, password := "", ""
 		var expiresOnUnix int64
 
@@ -85,7 +88,7 @@ func (f *fakeIdentityProviderResponseParser) ParseResponse(response entraid.Iden
 		}
 		username = parts[0]
 		password = parts[1]
-		expiresOnUnix, err := strconv.ParseInt(parts[2], 10, 64)
+		expiresOnUnix, err = strconv.ParseInt(parts[2], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse raw token: %w", err)
 		}

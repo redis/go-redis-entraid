@@ -3,8 +3,8 @@ module custom_example
 go 1.23.4
 
 require (
-	github.com/redis/go-redis-entraid v0.0.0-20250415111332-9d087bc29c12
-	github.com/redis/go-redis/v9 v9.5.3-0.20250415103233-40a89c56cc52
+	github.com/redis/go-redis-entraid v1.0.0
+	github.com/redis/go-redis/v9 v9.9.0
 )
 
 require (
