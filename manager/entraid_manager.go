@@ -272,13 +272,14 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 		return 0
 	}
 
-	// Calculate refresh time using integer math:
-	// 1. TTL is already in milliseconds
-	// 2. Multiply by refresh ratio (as integer percentage)
-	// 3. Add to received time
-	ttlMillis := t.TTL()                                     // Already in milliseconds
-	refreshRatioInt := int64(e.expirationRefreshRatio * 100) // Convert to integer percentage
-	refreshMillis := (ttlMillis * refreshRatioInt) / 100     // Integer division for ratio
+	ttlMillis := t.TTL() // Already in milliseconds
+	// let's not lose the precision here, examples use 0.001, which would be lost with integer math
+	// Example:
+	// ttlMillis = 10000
+	// e.expirationRefreshRatio = 0.001
+	//   - with int math: 10000 * (0.001*100) = 0ms
+	//   - with float math: 10000 * 0.001 = 10ms
+	refreshMillis := int64(float64(ttlMillis) * e.expirationRefreshRatio)
 	refreshTimeMillis := t.ReceivedAt().UnixMilli() + refreshMillis
 
 	// Calculate time until refresh
