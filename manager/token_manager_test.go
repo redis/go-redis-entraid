@@ -1457,21 +1457,25 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						select {
 						case tokenCh <- t:
 						default:
+							// Channel full, ignore
 						}
 					},
 					onErrorFunc: func(err error) {
 						select {
 						case errorCh <- err:
 						default:
+							// Channel full, ignore
 						}
 					},
 				}
 
 				// Choose operation based on a pattern
+				// Using modulo for a deterministic pattern that exercises all operations
 				opType := j % 3
 
 				switch opType {
 				case 0:
+					// Start the token manager with a new listener
 					closeFunc, err := tm.Start(listener)
 
 					if err != nil {
@@ -1485,12 +1489,15 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						continue
 					}
 
+					// Store the closer for later cleanup
 					closerKey := fmt.Sprintf("closer-%d-%d", routineID, j)
 					closers.Store(closerKey, closeFunc)
 
+					// Simulate some work
 					time.Sleep(time.Duration(500-rand.Intn(400)) * time.Millisecond)
 
 				case 1:
+					// Get current token
 					token, err := tm.GetToken(false)
 					if err != nil {
 						select {
@@ -1502,12 +1509,15 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						select {
 						case tokenCh <- token:
 						default:
+							// Channel full, ignore
 						}
 					}
 
 				case 2:
+					// Close a previously created token manager listener
+					// This simulates multiple subscriptions being created and destroyed
 					closers.Range(func(key, value interface{}) bool {
-						if j%10 > 7 {
+						if j%10 > 7 { // Only close some of the time based on a pattern
 							closeFunc := value.(StopFunc)
 							if err := closeFunc(); err != nil {
 								if err != ErrTokenManagerAlreadyStopped {
@@ -1520,7 +1530,7 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 							}
 
 							closers.Delete(key)
-							return false
+							return false // stop after finding one to close
 						}
 						return true
 					})
@@ -1538,6 +1548,8 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	// Use a timeout to detect deadlocks
 	select {
 	case <-doneCh:
+		// All operations completed successfully
+		t.Log("All concurrent operations completed successfully")
 	case <-time.After(30 * time.Second):
 		t.Fatal("test timed out, possible deadlock detected")
 	}
@@ -1596,6 +1608,14 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	totalOps := startCount + getTokenCount + closeCount
 	expectedOps := int32(numGoroutines * numConcurrentOps)
 
+	// Report operation counts
+	t.Logf("Concurrent test summary:")
+	t.Logf("- Total operations executed: %d (expected: %d)", totalOps, expectedOps)
+	t.Logf("- Start operations: %d (with %d errors)", startCount, len(startErrors))
+	t.Logf("- GetToken operations: %d (with %d errors, %d successful)",
+		getTokenCount, len(getTokenErrors), len(tokens))
+	t.Logf("- Close operations: %d (with %d errors)", closeCount, len(closeErrors))
+
 	// Some errors are expected due to concurrent operations
 	// but we should have received tokens successfully
 	assert.Equal(t, expectedOps, totalOps, "All operations should be accounted for")
@@ -1604,6 +1624,7 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 	// Verify the token manager still works after all the concurrent operations
 	finalListener := &concurrentTestTokenListener{
 		onNextFunc: func(t *token.Token) {
+			// Just verify we get a token - don't use assert within this callback
 			if t == nil {
 				panic("Final token should not be nil")
 			}
