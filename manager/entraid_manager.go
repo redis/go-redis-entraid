@@ -288,12 +288,12 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 		return 0
 	}
 
-	// Subtract lower bound from time till expiration
-	timeTillExpiration = timeTillExpiration - lowerBoundMillis
+	// Calculate time until lower bound
+	timeUntilLowerBound := timeTillExpiration - lowerBoundMillis
 
 	// If refresh would occur after lower bound, use time until lower bound
-	if timeTillExpiration < timeUntilRefresh {
-		return time.Duration(timeTillExpiration) * time.Millisecond
+	if timeUntilRefresh > timeUntilLowerBound {
+		return time.Duration(timeUntilLowerBound) * time.Millisecond
 	}
 
 	// Otherwise use time until refresh
