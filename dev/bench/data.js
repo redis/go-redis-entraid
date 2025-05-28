@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1748461755490,
+  "lastUpdate": 1748464660578,
   "repoUrl": "https://github.com/redis/go-redis-entraid",
   "entries": {
     "Go Benchmark": [
@@ -49858,6 +49858,842 @@ window.BENCHMARK_DATA = {
           {
             "name": "BenchmarkCopyToken - ns/op",
             "value": 0.3113,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "redis",
+            "username": "redis"
+          },
+          "committer": {
+            "name": "redis",
+            "username": "redis"
+          },
+          "id": "d3d600191dcac639d68e4a06462907204a76e64c",
+          "message": "fix(manager): optimize durationToRenewal",
+          "timestamp": "2025-05-27T20:08:32Z",
+          "url": "https://github.com/redis/go-redis-entraid/pull/6/commits/d3d600191dcac639d68e4a06462907204a76e64c"
+        },
+        "date": 1748464659798,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkIDPResp_Type",
+            "value": 0.3129,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - ns/op",
+            "value": 0.3129,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type",
+            "value": 0.3114,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - ns/op",
+            "value": 0.3114,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult",
+            "value": 0.3133,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - ns/op",
+            "value": 0.3133,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult",
+            "value": 0.3114,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - ns/op",
+            "value": 0.3114,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken",
+            "value": 0.3115,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - ns/op",
+            "value": 0.3115,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken",
+            "value": 0.3119,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - ns/op",
+            "value": 0.3119,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken",
+            "value": 0.3139,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - ns/op",
+            "value": 0.3139,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken",
+            "value": 0.3128,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - ns/op",
+            "value": 0.3128,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp",
+            "value": 32.72,
+            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
+            "extra": "36897571 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - ns/op",
+            "value": 32.72,
+            "unit": "ns/op",
+            "extra": "36897571 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "36897571 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "36897571 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp",
+            "value": 32.91,
+            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
+            "extra": "35427313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - ns/op",
+            "value": 32.91,
+            "unit": "ns/op",
+            "extra": "35427313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "35427313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "35427313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel",
+            "value": 3.739,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "320983832 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - ns/op",
+            "value": 3.739,
+            "unit": "ns/op",
+            "extra": "320983832 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "320983832 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "320983832 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel",
+            "value": 3.731,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "321250723 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - ns/op",
+            "value": 3.731,
+            "unit": "ns/op",
+            "extra": "321250723 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "321250723 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "321250723 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel",
+            "value": 6.852,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "175159056 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - ns/op",
+            "value": 6.852,
+            "unit": "ns/op",
+            "extra": "175159056 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "175159056 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "175159056 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel",
+            "value": 6.838,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "175421419 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - ns/op",
+            "value": 6.838,
+            "unit": "ns/op",
+            "extra": "175421419 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "175421419 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "175421419 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel",
+            "value": 8.744,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "137612840 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - ns/op",
+            "value": 8.744,
+            "unit": "ns/op",
+            "extra": "137612840 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "137612840 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "137612840 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel",
+            "value": 8.718,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "136914230 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - ns/op",
+            "value": 8.718,
+            "unit": "ns/op",
+            "extra": "136914230 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "136914230 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "136914230 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken",
+            "value": 63.96,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "16825942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - ns/op",
+            "value": 63.96,
+            "unit": "ns/op",
+            "extra": "16825942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "16825942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "16825942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken",
+            "value": 64.13,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "18864766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - ns/op",
+            "value": 64.13,
+            "unit": "ns/op",
+            "extra": "18864766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "18864766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "18864766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start",
+            "value": 6.868,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "174617349 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - ns/op",
+            "value": 6.868,
+            "unit": "ns/op",
+            "extra": "174617349 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "174617349 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "174617349 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start",
+            "value": 6.889,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "174771297 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - ns/op",
+            "value": 6.889,
+            "unit": "ns/op",
+            "extra": "174771297 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "174771297 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "174771297 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close",
+            "value": 10.68,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - ns/op",
+            "value": 10.68,
+            "unit": "ns/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close",
+            "value": 10.84,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - ns/op",
+            "value": 10.84,
+            "unit": "ns/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal",
+            "value": 61.34,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "19554235 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - ns/op",
+            "value": 61.34,
+            "unit": "ns/op",
+            "extra": "19554235 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "19554235 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "19554235 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal",
+            "value": 61.33,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "19581680 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - ns/op",
+            "value": 61.33,
+            "unit": "ns/op",
+            "extra": "19581680 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "19581680 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "19581680 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew",
+            "value": 0.3115,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - ns/op",
+            "value": 0.3115,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew",
+            "value": 0.3117,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - ns/op",
+            "value": 0.3117,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth",
+            "value": 0.3132,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - ns/op",
+            "value": 0.3132,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth",
+            "value": 0.312,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - ns/op",
+            "value": 0.312,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials",
+            "value": 0.3112,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - ns/op",
+            "value": 0.3112,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials",
+            "value": 0.3109,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - ns/op",
+            "value": 0.3109,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn",
+            "value": 0.6235,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - ns/op",
+            "value": 0.6235,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn",
+            "value": 0.6226,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - ns/op",
+            "value": 0.6226,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken",
+            "value": 0.3109,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - ns/op",
+            "value": 0.3109,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken",
+            "value": 0.3115,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken - ns/op",
+            "value": 0.3115,
             "unit": "ns/op",
             "extra": "1000000000 times\n4 procs"
           },
