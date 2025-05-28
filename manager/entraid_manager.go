@@ -11,6 +11,8 @@ import (
 	"github.com/redis/go-redis-entraid/token"
 )
 
+const RefreshRationPrecision = 10000
+
 // entraidTokenManager is a struct that implements the TokenManager interface.
 type entraidTokenManager struct {
 	// idp is the identity provider used to obtain the token.
@@ -244,7 +246,7 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 	}
 
 	// Get current time in milliseconds (UTC)
-	nowMillis := time.Now().UTC().UnixMilli()
+	nowMillis := time.Now().UnixMilli()
 
 	// Get expiration time in milliseconds
 	expMillis := t.ExpirationOn().UnixMilli()
@@ -272,9 +274,10 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 	// e.expirationRefreshRatio = 0.001
 	//   - with int math and 100 precision: 10000 * (0.001*100) = 0ms
 	//   - with int math and 10000 precision: 10000 * (0.001*10000) = 100ms
+	precision := int64(RefreshRationPrecision)
 	ttlMillis := t.TTL() // Already in milliseconds
-	refreshRationInt := int64(e.expirationRefreshRatio * 10000)
-	refreshMillis := ttlMillis * refreshRationInt / 10000
+	refreshRatioInt := int64(e.expirationRefreshRatio * float64(precision))
+	refreshMillis := ttlMillis * refreshRatioInt / precision
 	refreshTimeMillis := t.ReceivedAt().UnixMilli() + refreshMillis
 
 	// Calculate time until refresh
@@ -285,15 +288,14 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 		return 0
 	}
 
-	// Convert to time.Duration for final calculations
-	timeUntilRefreshDur := time.Duration(timeUntilRefresh) * time.Millisecond
-	timeTillExpirationDur := time.Duration(timeTillExpiration) * time.Millisecond
+	// Subtract lower bound from time till expiration
+	timeTillExpiration = timeTillExpiration - lowerBoundMillis
 
 	// If refresh would occur after lower bound, use time until lower bound
-	if timeTillExpirationDur-e.lowerBoundDuration < timeUntilRefreshDur {
-		return timeTillExpirationDur - e.lowerBoundDuration
+	if timeTillExpiration < timeUntilRefresh {
+		return time.Duration(timeTillExpiration) * time.Millisecond
 	}
 
 	// Otherwise use time until refresh
-	return timeUntilRefreshDur
+	return time.Duration(timeUntilRefresh) * time.Millisecond
 }
