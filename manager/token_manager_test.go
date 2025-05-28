@@ -598,6 +598,171 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		assert.NotNil(t, token1)
 	})
 
+	t.Run("GetToken with cached token", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// First setup the manager with a token
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token to verify caching
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token again, should return the cached token
+		token2, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, token1, token2)
+
+		// Verify that RequestToken was not called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 1)
+	})
+
+	t.Run("GetToken with force refresh", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// First setup the manager with a token
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token with force refresh, should get the new token
+		token2, err := tokenManager.GetToken(true)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, differentToken, token2)
+
+		// Verify that RequestToken was called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 2)
+	})
+
+	t.Run("GetToken with valid cached token and positive duration", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+				ExpirationRefreshRatio:         0.75,
+				LowerRefreshBound:              time.Hour,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// Create a token that will have a positive duration
+		validToken := token.New(
+			"username",
+			"password",
+			"rawToken",
+			time.Now().Add(2*time.Hour), // Expires in 2 hours
+			time.Now(),
+			(2 * time.Hour).Milliseconds(),
+		)
+
+		// First get a token to cache it
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(validToken, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token again without force refresh
+		token2, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, token1, token2) // Should return the cached token
+
+		// Verify that RequestToken was not called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 1)
+	})
+
 	t.Run("GetToken with parse error", func(t *testing.T) {
 		t.Parallel()
 		idp := &mockIdentityProvider{}
@@ -717,6 +882,63 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		token1, err := tokenManager.GetToken(false)
 		assert.Error(t, err)
 		assert.Nil(t, token1)
+	})
+
+	t.Run("GetToken with token set between checks", func(t *testing.T) {
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+				ExpirationRefreshRatio:         0.5,
+				LowerRefreshBound:              time.Minute,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		validToken := token.New(
+			"username",
+			"password",
+			"rawToken",
+			time.Now().Add(1*time.Hour),
+			time.Now(),
+			(1 * time.Hour).Milliseconds(),
+		)
+
+		// Step 1: Acquire the read lock
+		tm.tokenRWLock.RLock()
+
+		// Step 2: Start GetToken in a goroutine (it will block on upgrading to write lock)
+		var token2 *token.Token
+		var err2 error
+		getTokenStarted := make(chan struct{})
+		getTokenDone := make(chan struct{})
+		go func() {
+			close(getTokenStarted)
+			token2, err2 = tokenManager.GetToken(false)
+			close(getTokenDone)
+		}()
+
+		// Step 3: Wait for GetToken to start and block on write lock
+		<-getTokenStarted
+		// Give the goroutine a moment to reach the write lock
+		time.Sleep(1 * time.Millisecond)
+		// Step 4: Set the token
+		tm.token = validToken
+		// Step 5: Release the read lock so GetToken can proceed
+		tm.tokenRWLock.RUnlock()
+
+		// Step 6: Wait for GetToken to finish
+		<-getTokenDone
+
+		// Step 7: Assert the result
+		assert.NoError(t, err2)
+		assert.NotNil(t, token2)
+		assert.Equal(t, validToken, token2)
+		idp.AssertNotCalled(t, "RequestToken")
 	})
 }
 
