@@ -220,9 +220,6 @@ func (e *entraidTokenManager) stop() (err error) {
 	defer func() {
 		// recover from panic and return the error
 		if r := recover(); r != nil {
-			// make sure the lock is released
-			e.lock.TryLock()
-			e.lock.Unlock()
 			err = fmt.Errorf("failed to stop token manager: %s", r)
 		}
 	}()
