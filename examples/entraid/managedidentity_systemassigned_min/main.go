@@ -10,6 +10,7 @@ import (
 	"config"
 
 	entraid "github.com/redis/go-redis-entraid"
+	"github.com/redis/go-redis-entraid/identity"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -23,7 +24,11 @@ func main() {
 	}
 
 	// Create a managed identity credentials provider for system-assigned identity
-	cp, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{})
+	cp, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
+		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+			ManagedIdentityType: identity.SystemAssignedIdentity,
+		},
+	})
 	if err != nil {
 		log.Fatalf("Failed to create credentials provider: %v", err)
 	}
