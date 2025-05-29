@@ -40,7 +40,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:                "client-id",
 			CredentialsType:         "ClientCertificate",
-			ClientCert:              []*x509.Certificate{&x509.Certificate{}},
+			ClientCert:              []*x509.Certificate{{}},
 			ClientPrivateKey:        "private-key",
 			Scopes:                  []string{"scope1", "scope2"},
 			Authority:               AuthorityConfiguration{},
@@ -58,7 +58,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:         "client-id",
 			CredentialsType:  "ClientCertificate",
-			ClientCert:       []*x509.Certificate{&x509.Certificate{}},
+			ClientCert:       []*x509.Certificate{{}},
 			ClientPrivateKey: "private-key",
 			Scopes:           []string{"scope1", "scope2"},
 			Authority:        AuthorityConfiguration{},
@@ -192,7 +192,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 		opts := ConfidentialIdentityProviderOptions{
 			ClientID:         "client-id",
 			CredentialsType:  "ClientCertificate",
-			ClientCert:       []*x509.Certificate{&x509.Certificate{}},
+			ClientCert:       []*x509.Certificate{{}},
 			ClientPrivateKey: nil,
 			Scopes:           []string{"scope1", "scope2"},
 			Authority:        AuthorityConfiguration{},

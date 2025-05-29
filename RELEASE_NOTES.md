@@ -1,3 +1,16 @@
+# v1.0.1
+
+## Changes
+
+- fix(manager): optimize durationToRenewal @ndyakov (#6)
+- chore(documentation): add release notes, add badges in readme (#7)
+- chore(dependencies): update dependencies
+
+## Compatibility
+
+- Go: 1.23+
+- go-redis: v9.9.0+
+
 # v1.0.0
 
 ## Introduction

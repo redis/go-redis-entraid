@@ -1,6 +1,10 @@
 # go-redis-entraid
 Entra ID extension for go-redis
 
+[![build workflow](https://github.com/redis/go-redis-entraid/actions/workflows/build.yml/badge.svg)](https://github.com/redis/go-redis-entraid/actions)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/redis/go-redis-entraid)](https://pkg.go.dev/github.com/redis/go-redis-entraid?tab=doc)
+[![Go Report Card](https://goreportcard.com/badge/github.com/redis/go-redis-entraid)](https://goreportcard.com/report/github.com/redis/go-redis-entraid)
+
 ## Table of Contents
 - [Introduction](#introduction)
 - [Quick Start](#quick-start)
@@ -17,9 +21,8 @@ Entra ID extension for go-redis
 go-redis-entraid is a Go library that provides Entra ID (formerly Azure AD) authentication support for Redis Enterprise Cloud. It enables secure authentication using various Entra ID identity types and manages token lifecycle automatically.
 
 ### Version Compatibility
-- Go: 1.16+
-- Redis: 6.0+
-- Azure Entra ID: Latest
+- Go: 1.23+
+- go-redis: v9.9.0+
 
 ### Key Features
 - Support for multiple Entra ID identity types
