@@ -48,7 +48,7 @@ func (m *fakeTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
 			rawTokenString,
 			time.Now().Add(tokenExpiration),
 			time.Now(),
-			int64(tokenExpiration.Seconds()),
+			tokenExpiration.Milliseconds(),
 		)
 	}
 	return m.token, m.err
@@ -136,7 +136,7 @@ type mockTokenManager struct {
 	done     chan struct{}
 	options  manager.TokenManagerOptions
 	listener manager.TokenListener
-	lock     sync.Mutex
+	lock     *sync.Mutex
 }
 
 func (m *mockTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {

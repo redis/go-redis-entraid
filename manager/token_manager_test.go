@@ -598,6 +598,171 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		assert.NotNil(t, token1)
 	})
 
+	t.Run("GetToken with cached token", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// First setup the manager with a token
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token to verify caching
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token again, should return the cached token
+		token2, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, token1, token2)
+
+		// Verify that RequestToken was not called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 1)
+	})
+
+	t.Run("GetToken with force refresh", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// First setup the manager with a token
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token with force refresh, should get the new token
+		token2, err := tokenManager.GetToken(true)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, differentToken, token2)
+
+		// Verify that RequestToken was called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 2)
+	})
+
+	t.Run("GetToken with valid cached token and positive duration", func(t *testing.T) {
+		t.Parallel()
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+				ExpirationRefreshRatio:         0.75,
+				LowerRefreshBound:              time.Hour,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		// Create a token that will have a positive duration
+		validToken := token.New(
+			"username",
+			"password",
+			"rawToken",
+			time.Now().Add(2*time.Hour), // Expires in 2 hours
+			time.Now(),
+			(2 * time.Hour).Milliseconds(),
+		)
+
+		// First get a token to cache it
+		rawResponse := &authResult{
+			ResultType:  shared.ResponseTypeRawToken,
+			RawTokenVal: "test",
+		}
+
+		idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
+		mParser.On("ParseResponse", rawResponse).Return(validToken, nil)
+
+		// Get the token once to cache it
+		token1, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token1)
+
+		// Change the mock to return a different token
+		differentToken := token.New(
+			"different",
+			"different",
+			"different",
+			time.Now().Add(time.Hour),
+			time.Now(),
+			time.Hour.Milliseconds(),
+		)
+		mParser = &mockIdentityProviderResponseParser{}
+		mParser.On("ParseResponse", rawResponse).Return(differentToken, nil)
+		tm.identityProviderResponseParser = mParser
+
+		// Get the token again without force refresh
+		token2, err := tokenManager.GetToken(false)
+		assert.NoError(t, err)
+		assert.NotNil(t, token2)
+		assert.Equal(t, token1, token2) // Should return the cached token
+
+		// Verify that RequestToken was not called again
+		idp.AssertNumberOfCalls(t, "RequestToken", 1)
+	})
+
 	t.Run("GetToken with parse error", func(t *testing.T) {
 		t.Parallel()
 		idp := &mockIdentityProvider{}
@@ -718,6 +883,67 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token1)
 	})
+
+	t.Run("GetToken with token set between checks", func(t *testing.T) {
+		t.Skip("Flaky test, can cause a race")
+		idp := &mockIdentityProvider{}
+		mParser := &mockIdentityProviderResponseParser{}
+		tokenManager, err := NewTokenManager(idp,
+			TokenManagerOptions{
+				IdentityProviderResponseParser: mParser,
+				ExpirationRefreshRatio:         0.5,
+				LowerRefreshBound:              time.Minute,
+			},
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, tokenManager)
+		tm, ok := tokenManager.(*entraidTokenManager)
+		assert.True(t, ok)
+
+		validToken := token.New(
+			"username",
+			"password",
+			"rawToken",
+			time.Now().Add(1*time.Hour),
+			time.Now(),
+			(1 * time.Hour).Milliseconds(),
+		)
+
+		// Step 1: Acquire the read lock
+		// This simulates a concurrent GetToken operation
+		// this should be a write lock since we are actually writing
+		// but it will block the get token if we acquire the write lock first
+		tm.tokenRWLock.RLock()
+
+		// Step 2: Start GetToken in a goroutine (it will block on upgrading to write lock)
+		var token2 *token.Token
+		var err2 error
+		getTokenStarted := make(chan struct{})
+		getTokenDone := make(chan struct{})
+		go func() {
+			close(getTokenStarted)
+			token2, err2 = tokenManager.GetToken(false)
+			close(getTokenDone)
+		}()
+
+		// Step 3: Wait for GetToken to start and block on write lock
+		<-getTokenStarted
+		// Give the goroutine a moment to reach the write lock
+		time.Sleep(1 * time.Millisecond)
+		// Step 4: Set the token
+		tm.token = validToken
+		// Step 5: Release the read lock so GetToken can proceed
+		tm.tokenRWLock.RUnlock()
+
+		// Step 6: Wait for GetToken to finish
+		<-getTokenDone
+
+		// Step 7: Assert the result
+		assert.NoError(t, err2)
+		assert.NotNil(t, token2)
+		assert.Equal(t, validToken, token2)
+		idp.AssertNotCalled(t, "RequestToken")
+	})
 }
 
 func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
@@ -805,10 +1031,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		token1 := token.New(
 			"test",
 			"test",
-			"test",
+			"debug",
 			expiresOn,
 			time.Now(),
-			int64(time.Until(expiresOn)),
+			time.Until(expiresOn).Milliseconds(),
 		)
 
 		mParser.On("ParseResponse", idpResponse).Return(token1, nil).Once()
@@ -820,9 +1046,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal / 10)
+		time.Sleep(toRenewal / 10)
 		assert.NotNil(t, tm.listener)
 		assert.NoError(t, stopper())
 		assert.Nil(t, tm.listener)
@@ -830,7 +1058,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 			close(tm.closedChan)
 		})
 
-		<-time.After(toRenewal)
+		time.Sleep(toRenewal)
 		// already stopped
 		assert.Error(t, stopper())
 		mock.AssertExpectationsForObjects(t, idp, mParser, listener)
@@ -892,7 +1120,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		// wait for request token to be called
 		<-done
 		// wait a bit for listener to be notified
-		<-time.After(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		assert.NoError(t, cancel())
 
 		assert.InDelta(t, stop.Sub(start), tm.retryOptions.InitialDelay, float64(200*time.Millisecond))
@@ -944,7 +1172,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(time.Duration(tm.retryOptions.InitialDelay / 2))
+		time.Sleep(tm.retryOptions.InitialDelay / 2)
 		assert.NoError(t, cancel())
 		assert.Nil(t, tm.listener)
 		assert.Panics(t, func() {
@@ -995,10 +1223,12 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(toRenewal + time.Second)
+		time.Sleep(toRenewal + time.Second)
 
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
@@ -1048,9 +1278,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal + 100*time.Millisecond)
+		time.Sleep(toRenewal + 100*time.Millisecond)
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		mock.AssertExpectationsForObjects(t, idp, listener)
 	})
@@ -1100,9 +1332,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
-		<-time.After(toRenewal + 100*time.Millisecond)
+		time.Sleep(toRenewal + 100*time.Millisecond)
 
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		listener.AssertNumberOfCalls(t, "OnError", 1)
@@ -1173,6 +1407,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, tm.listener)
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1249,10 +1485,13 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		toRenewal := tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, time.Duration(0), toRenewal)
+
+		time.Sleep(time.Millisecond)
+		toRenewal = tm.durationToRenewal(tm.token)
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
-		<-time.After(toRenewal + 500*time.Millisecond)
+		time.Sleep(toRenewal + 500*time.Millisecond)
 		assert.Nil(t, cancel())
 
 		select {
@@ -1261,7 +1500,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		case <-tm.closedChan:
 		}
 
-		<-time.After(50 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		// maxAttempts + the initial one
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
@@ -1460,17 +1699,13 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 				// Using modulo for a deterministic pattern that exercises all operations
 				opType := j % 3
 
-				// t.Logf("Goroutine %d, Operation %d: Performing operation type %d", routineID, j, opType)
-
 				switch opType {
 				case 0:
 					// Start the token manager with a new listener
-					// t.Logf("Goroutine %d, Operation %d: Attempting to start token manager", routineID, j)
 					closeFunc, err := tm.Start(listener)
 
 					if err != nil {
 						if err != ErrTokenManagerAlreadyStarted {
-							// t.Logf("Goroutine %d, Operation %d: Start failed with error: %v", routineID, j, err)
 							select {
 							case errorCh <- fmt.Errorf("failed to start token manager: %w", err):
 							default:
@@ -1480,7 +1715,6 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						continue
 					}
 
-					// t.Logf("Goroutine %d, Operation %d: Successfully started token manager", routineID, j)
 					// Store the closer for later cleanup
 					closerKey := fmt.Sprintf("closer-%d-%d", routineID, j)
 					closers.Store(closerKey, closeFunc)
@@ -1490,17 +1724,14 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 
 				case 1:
 					// Get current token
-					//t.Logf("Goroutine %d, Operation %d: Getting token", routineID, j)
 					token, err := tm.GetToken(false)
 					if err != nil {
-						//t.Logf("Goroutine %d, Operation %d: GetToken failed with error: %v", routineID, j, err)
 						select {
 						case errorCh <- fmt.Errorf("failed to get token: %w", err):
 						default:
 							t.Fatalf("Goroutine %d, Operation %d: Failed to get token: %v", routineID, j, err)
 						}
 					} else if token != nil {
-						//t.Logf("Goroutine %d, Operation %d: Successfully got token, expires: %v", routineID, j, token.ExpirationOn())
 						select {
 						case tokenCh <- token:
 						default:
@@ -1511,28 +1742,17 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 				case 2:
 					// Close a previously created token manager listener
 					// This simulates multiple subscriptions being created and destroyed
-					//t.Logf("Goroutine %d, Operation %d: Attempting to close a token manager", routineID, j)
-					closedAny := false
-
 					closers.Range(func(key, value interface{}) bool {
 						if j%10 > 7 { // Only close some of the time based on a pattern
-							closedAny = true
-							//t.Logf("Goroutine %d, Operation %d: Closing token manager with key %v", routineID, j, key)
-
 							closeFunc := value.(StopFunc)
 							if err := closeFunc(); err != nil {
 								if err != ErrTokenManagerAlreadyStopped {
-									// t.Logf("Goroutine %d, Operation %d: Close failed with error: %v", routineID, j, err)
 									select {
 									case errorCh <- fmt.Errorf("failed to close token manager: %w", err):
 									default:
 										t.Fatalf("Goroutine %d, Operation %d: Failed to close token manager: %v", routineID, j, err)
 									}
-								} else {
-									//t.Logf("Goroutine %d, Operation %d: TokenManager was already stopped",  routineID, j)
 								}
-							} else {
-								// t.Logf("Goroutine %d, Operation %d: Successfully closed token manager", routineID, j)
 							}
 
 							closers.Delete(key)
@@ -1540,10 +1760,6 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						}
 						return true
 					})
-
-					if !closedAny {
-						//t.Logf("Goroutine %d, Operation %d: No token manager to close or condition not met",  routineID, j)
-					}
 				}
 			}
 		}(i)

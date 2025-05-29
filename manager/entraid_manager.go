@@ -11,6 +11,8 @@ import (
 	"github.com/redis/go-redis-entraid/token"
 )
 
+const RefreshRationPrecision = 10000
+
 // entraidTokenManager is a struct that implements the TokenManager interface.
 type entraidTokenManager struct {
 	// idp is the identity provider used to obtain the token.
@@ -20,7 +22,7 @@ type entraidTokenManager struct {
 	token *token.Token
 
 	// tokenRWLock is a read-write lock used to protect the token from concurrent access.
-	tokenRWLock sync.RWMutex
+	tokenRWLock *sync.RWMutex
 
 	// identityProviderResponseParser is the parser used to parse the response from the identity provider.
 	// It`s ParseResponse method will be called to parse the response and return the token.
@@ -40,7 +42,7 @@ type entraidTokenManager struct {
 	listener TokenListener
 
 	// lock locks the listener to prevent concurrent access.
-	lock sync.Mutex
+	lock *sync.Mutex
 
 	// expirationRefreshRatio is the ratio of the token expiration time to refresh the token.
 	// It is used to determine when to refresh the token.
@@ -221,12 +223,14 @@ func (e *entraidTokenManager) stop() (err error) {
 			err = fmt.Errorf("failed to stop token manager: %s", r)
 		}
 	}()
+	if e.ctxCancel != nil {
+		e.ctxCancel()
+	}
 
 	if e.closedChan == nil || e.listener == nil {
 		return ErrTokenManagerAlreadyStopped
 	}
 
-	e.ctxCancel()
 	e.listener = nil
 	close(e.closedChan)
 
@@ -238,30 +242,63 @@ func (e *entraidTokenManager) stop() (err error) {
 // If the token is nil, it returns 0.
 // If the time till expiration is less than the lower bound duration, it returns 0 to renew the token now.
 func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
+	// Fast path: nil token check
 	if t == nil {
 		return 0
 	}
-	expirationRefreshTime := t.ReceivedAt().Add(time.Duration(float64(t.TTL()) * float64(time.Second) * e.expirationRefreshRatio))
-	timeTillExpiration := time.Until(t.ExpirationOn())
-	now := time.Now().UTC()
 
-	if expirationRefreshTime.Before(now) {
+	// Get current time in milliseconds (UTC)
+	nowMillis := time.Now().UnixMilli()
+
+	// Get expiration time in milliseconds
+	expMillis := t.ExpirationOn().UnixMilli()
+
+	// Fast path: token already expired
+	if expMillis <= nowMillis {
 		return 0
 	}
 
-	// if the timeTillExpiration is less than the lower bound (or 0), return 0 to renew the token NOW
-	if timeTillExpiration <= e.lowerBoundDuration || timeTillExpiration <= 0 {
+	// Calculate time until expiration in milliseconds
+	timeTillExpiration := expMillis - nowMillis
+
+	// Get lower bound in milliseconds
+	lowerBoundMillis := e.lowerBoundDuration.Milliseconds()
+
+	// Fast path: time until expiration is less than lower bound
+	if timeTillExpiration <= lowerBoundMillis {
 		return 0
 	}
 
-	// Calculate the time to renew the token based on the expiration refresh ratio
-	duration := time.Until(expirationRefreshTime)
+	// Calculate refresh time using integer math with higher precision
+	// example tests use 0.001, which would be lost with lower precision
+	// Example:
+	// ttlMillis = 10000
+	// e.expirationRefreshRatio = 0.001
+	//   - with int math and 100 precision: 10000 * (0.001*100) = 0ms
+	//   - with int math and 10000 precision: 10000 * (0.001*10000) = 100ms
+	precision := int64(RefreshRationPrecision)
+	receivedAtMillis := t.ReceivedAt().UnixMilli()
+	ttlMillis := t.TTL() // Already in milliseconds
+	refreshRatioInt := int64(e.expirationRefreshRatio * float64(precision))
+	refreshMillis := ttlMillis * refreshRatioInt / precision
+	refreshTimeMillis := receivedAtMillis + refreshMillis
 
-	// if the duration will take us past the lower bound, return the duration to lower bound
-	if timeTillExpiration-e.lowerBoundDuration < duration {
-		return timeTillExpiration - e.lowerBoundDuration
+	// Calculate time until refresh
+	timeUntilRefresh := refreshTimeMillis - nowMillis
+
+	// Fast path: refresh time is in the past
+	if timeUntilRefresh <= 0 {
+		return 0
 	}
 
-	// return the calculated duration
-	return duration
+	// Calculate time until lower bound
+	timeUntilLowerBound := timeTillExpiration - lowerBoundMillis
+
+	// If refresh would occur after lower bound, use time until lower bound
+	if timeUntilRefresh > timeUntilLowerBound {
+		return time.Duration(timeUntilLowerBound) * time.Millisecond
+	}
+
+	// Otherwise use time until refresh
+	return time.Duration(timeUntilRefresh) * time.Millisecond
 }

@@ -61,7 +61,7 @@ var testTokenValid = token.New(
 	"test",
 	time.Now().Add(time.Hour),
 	time.Now(),
-	int64(time.Hour.Seconds()),
+	time.Hour.Milliseconds(),
 )
 
 func newTestJWTToken(expiresOn time.Time) string {

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis-entraid/shared"
@@ -16,6 +17,8 @@ type TokenManagerOptions struct {
 	// The value should be between 0 and 1.
 	// For example, if the expiration time is 1 hour and the ratio is 0.75,
 	// the token will be refreshed after 45 minutes. (the token is refreshed when 75% of its lifetime has passed)
+	// Precision is 4 decimal places.
+	// Closer to 1, the token will be refreshed later. We recommend not going above 0.9.
 	//
 	// default: 0.7
 	ExpirationRefreshRatio float64
@@ -125,5 +128,7 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
+		tokenRWLock:                    &sync.RWMutex{},
+		lock:                           &sync.Mutex{},
 	}, nil
 }

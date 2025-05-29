@@ -24,7 +24,7 @@ func TestOnTokenNext(t *testing.T) {
 	listener := tokenListenerFromCP(cp)
 
 	now := time.Now()
-	testToken := token.New("test-user", "test-pass", "test-token", now.Add(time.Hour), now, 3600)
+	testToken := token.New("test-user", "test-pass", "test-token", now.Add(time.Hour), now, time.Hour.Milliseconds())
 
 	listener.OnNext(testToken)
 
