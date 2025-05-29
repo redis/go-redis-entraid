@@ -223,12 +223,14 @@ func (e *entraidTokenManager) stop() (err error) {
 			err = fmt.Errorf("failed to stop token manager: %s", r)
 		}
 	}()
+	if e.ctxCancel != nil {
+		e.ctxCancel()
+	}
 
 	if e.closedChan == nil || e.listener == nil {
 		return ErrTokenManagerAlreadyStopped
 	}
 
-	e.ctxCancel()
 	e.listener = nil
 	close(e.closedChan)
 
