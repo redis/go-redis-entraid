@@ -336,7 +336,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			LastTokenCh: make(chan string, 1),
 			LastErrCh:   make(chan error, 1),
 		}
-		mtm := &mockTokenManager{done: make(chan struct{})}
+		mtm := &mockTokenManager{done: make(chan struct{}), lock: &sync.Mutex{}}
 		// Set the token manager factory in the options
 		options := opts
 		options.tokenManagerFactory = mockTokenManagerFactory(mtm)
@@ -388,7 +388,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			time.Now(),
 			tokenExpiration.Milliseconds(),
 		)
-		mtm := &mockTokenManager{done: make(chan struct{})}
+		mtm := &mockTokenManager{done: make(chan struct{}), lock: &sync.Mutex{}}
 		// Set the token manager factory in the options
 		options := opts
 		options.tokenManagerFactory = mockTokenManagerFactory(mtm)
@@ -459,7 +459,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 
 	t.Run("concurrent subscribe and get token error ", func(t *testing.T) {
 		t.Parallel()
-		mtm := &mockTokenManager{done: make(chan struct{})}
+		mtm := &mockTokenManager{done: make(chan struct{}), lock: &sync.Mutex{}}
 		// Set the token manager factory in the options
 		options := opts
 		options.tokenManagerFactory = mockTokenManagerFactory(mtm)

@@ -58,7 +58,9 @@ func (t *Token) RawToken() string {
 // ReceivedAt returns the time when the token was received.
 func (t *Token) ReceivedAt() time.Time {
 	if t.receivedAt.IsZero() {
-		return time.Now()
+		// set it to now, recalculate ttl
+		t.receivedAt = time.Now()
+		t.ttl = t.expiresOn.Sub(t.receivedAt).Milliseconds()
 	}
 	return t.receivedAt
 }

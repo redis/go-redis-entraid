@@ -22,7 +22,7 @@ type entraidTokenManager struct {
 	token *token.Token
 
 	// tokenRWLock is a read-write lock used to protect the token from concurrent access.
-	tokenRWLock sync.RWMutex
+	tokenRWLock *sync.RWMutex
 
 	// identityProviderResponseParser is the parser used to parse the response from the identity provider.
 	// It`s ParseResponse method will be called to parse the response and return the token.
@@ -42,7 +42,7 @@ type entraidTokenManager struct {
 	listener TokenListener
 
 	// lock locks the listener to prevent concurrent access.
-	lock sync.Mutex
+	lock *sync.Mutex
 
 	// expirationRefreshRatio is the ratio of the token expiration time to refresh the token.
 	// It is used to determine when to refresh the token.
@@ -220,6 +220,9 @@ func (e *entraidTokenManager) stop() (err error) {
 	defer func() {
 		// recover from panic and return the error
 		if r := recover(); r != nil {
+			// make sure the lock is released
+			e.lock.TryLock()
+			e.lock.Unlock()
 			err = fmt.Errorf("failed to stop token manager: %s", r)
 		}
 	}()
@@ -275,10 +278,11 @@ func (e *entraidTokenManager) durationToRenewal(t *token.Token) time.Duration {
 	//   - with int math and 100 precision: 10000 * (0.001*100) = 0ms
 	//   - with int math and 10000 precision: 10000 * (0.001*10000) = 100ms
 	precision := int64(RefreshRationPrecision)
+	receivedAtMillis := t.ReceivedAt().UnixMilli()
 	ttlMillis := t.TTL() // Already in milliseconds
 	refreshRatioInt := int64(e.expirationRefreshRatio * float64(precision))
 	refreshMillis := ttlMillis * refreshRatioInt / precision
-	refreshTimeMillis := t.ReceivedAt().UnixMilli() + refreshMillis
+	refreshTimeMillis := receivedAtMillis + refreshMillis
 
 	// Calculate time until refresh
 	timeUntilRefresh := refreshTimeMillis - nowMillis

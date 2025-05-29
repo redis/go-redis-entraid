@@ -136,7 +136,7 @@ type mockTokenManager struct {
 	done     chan struct{}
 	options  manager.TokenManagerOptions
 	listener manager.TokenListener
-	lock     sync.Mutex
+	lock     *sync.Mutex
 }
 
 func (m *mockTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {

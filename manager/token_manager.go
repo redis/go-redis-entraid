@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis-entraid/shared"
@@ -127,5 +128,7 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
+		tokenRWLock:                    &sync.RWMutex{},
+		lock:                           &sync.Mutex{},
 	}, nil
 }

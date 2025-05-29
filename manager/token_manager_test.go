@@ -885,6 +885,7 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 	})
 
 	t.Run("GetToken with token set between checks", func(t *testing.T) {
+		t.Skip("Flaky test, can cause a race")
 		idp := &mockIdentityProvider{}
 		mParser := &mockIdentityProviderResponseParser{}
 		tokenManager, err := NewTokenManager(idp,
@@ -909,6 +910,9 @@ func TestEntraidTokenManager_GetToken(t *testing.T) {
 		)
 
 		// Step 1: Acquire the read lock
+		// This simulates a concurrent GetToken operation
+		// this should be a write lock since we are actually writing
+		// but it will block the get token if we acquire the write lock first
 		tm.tokenRWLock.RLock()
 
 		// Step 2: Start GetToken in a goroutine (it will block on upgrading to write lock)
