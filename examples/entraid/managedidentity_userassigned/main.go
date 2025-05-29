@@ -27,7 +27,6 @@ func main() {
 	// Create a managed identity credentials provider for user-assigned identity
 	cp, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
 		CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-			ClientID: cfg.AzureClientID,
 			TokenManagerOptions: manager.TokenManagerOptions{
 				ExpirationRefreshRatio: 0.001,           // Set to refresh very early
 				LowerRefreshBound:      time.Second * 1, // Set lower bound to 1 second

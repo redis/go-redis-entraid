@@ -101,7 +101,7 @@ type ConfidentialCredentialsProviderOptions struct {
 // The client credentials can be either a client secret or a client certificate.
 func NewConfidentialCredentialsProvider(options ConfidentialCredentialsProviderOptions) (auth.StreamingCredentialsProvider, error) {
 	// If the client ID is not provided in the confidential identity provider options, use the one from the credentials provider options.
-	// Those are duplicated and should be the same.
+	// Those are duplicated and should be the same and the one in the credentials provider options is deprecated.
 	if options.ConfidentialIdentityProviderOptions.ClientID == "" {
 		options.ConfidentialIdentityProviderOptions.ClientID = options.CredentialsProviderOptions.ClientID
 	}
