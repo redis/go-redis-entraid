@@ -2,7 +2,7 @@ package internal
 
 // IsClosed checks if a channel is closed.
 // Returns true only if the channel is actually closed, not just if it has data available.
-// 
+//
 // WARNING: This function will consume one value from the channel if it has pending data.
 // Use with caution on channels where consuming data might cause issues.
 func IsClosed(ch <-chan struct{}) bool {
