@@ -94,14 +94,15 @@ func TestCopyToken(t *testing.T) {
 	assert.NotEqual(t, token.expiresOn, copiedToken.expiresOn)
 
 	// copy nil
-	copiedToken = copyToken(nil)
-	assert.Nil(t, copiedToken)
+	nilToken := copyToken(nil)
+	assert.Nil(t, nilToken)
 	// copy empty token
-	copiedToken = copyToken(&Token{})
-	assert.NotNil(t, copiedToken)
+	emptyToken := copyToken(&Token{})
+	assert.Nil(t, emptyToken)
 	anotherCopy := copiedToken.Copy()
 	anotherCopy.rawToken = "changed"
 	assert.NotEqual(t, copiedToken, anotherCopy)
+	assert.NotEqual(t, copiedToken.rawToken, anotherCopy.rawToken)
 }
 
 func TestTokenReceivedAt(t *testing.T) {
@@ -124,7 +125,7 @@ func TestTokenReceivedAt(t *testing.T) {
 	// Check if the copied token is a new instance
 	assert.NotNil(t, tcopiedToken)
 
-	emptyRecievedAt := &Token{}
+	emptyRecievedAt := New("username", "password", "rawToken", time.Now(), time.Time{}, time.Hour.Milliseconds())
 	assert.True(t, emptyRecievedAt.ReceivedAt().After(time.Now().Add(-1*time.Hour)))
 	assert.True(t, emptyRecievedAt.ReceivedAt().Before(time.Now().Add(1*time.Hour)))
 }
