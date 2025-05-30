@@ -232,7 +232,11 @@ func (e *entraidTokenManager) stop() (err error) {
 	}
 
 	e.listener = nil
-	close(e.closedChan)
+
+	// Safely close the channel - only close if not already closed
+	if !internal.IsClosed(e.closedChan) {
+		close(e.closedChan)
+	}
 
 	return nil
 }
