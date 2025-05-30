@@ -1,9 +1,27 @@
-# v1.0.1
+# v1.0.3 (2025-05-30)
+
+## Introduction
+
+ClientID in CredentialsProviderOptions is not used and will be removed in a future version.
+The correct one to use is the one in the identity provider options (e.g. ConfidentialIdentityProviderOptions).
 
 ## Changes
 
-- fix(manager): optimize durationToRenewal @ndyakov (#6)
-- chore(documentation): add release notes, add badges in readme (#7)
+## 🧰 Maintenance
+
+- refactor(provider): Mark ClientID as deprecated, use correct one in examples. ([#8](https://github.com/redis/go-redis-entraid/pull/8))
+
+## Compatibility
+
+- Go: 1.23+
+- go-redis: v9.9.0+
+
+# v1.0.2 (2025-05-29)
+
+## Changes
+
+- fix(manager): optimize durationToRenewal ([#6](https://github.com/redis/go-redis-entraid/pull/6))
+- chore(documentation): add release notes, add badges in readme ([#7](https://github.com/redis/go-redis-entraid/pull/7))
 - chore(dependencies): update dependencies
 
 ## Compatibility
@@ -11,7 +29,7 @@
 - Go: 1.23+
 - go-redis: v9.9.0+
 
-# v1.0.0
+# v1.0.0 (2025-05-27)
 
 ## Introduction
 
