@@ -33,9 +33,8 @@ func main() {
 			},
 		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-			// For system-assigned identity, we don't need to specify ClientID
 			Scopes:              cfg.GetRedisScopes(),
-			ManagedIdentityType: "SystemAssigned",
+			ManagedIdentityType: identity.SystemAssignedIdentity,
 		},
 	})
 	if err != nil {

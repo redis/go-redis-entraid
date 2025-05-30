@@ -11,7 +11,6 @@ import (
 
 	entraid "github.com/redis/go-redis-entraid"
 	"github.com/redis/go-redis-entraid/identity"
-	"github.com/redis/go-redis-entraid/manager"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -24,18 +23,10 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Create a managed identity credentials provider for user-assigned identity
+	// Create a managed identity credentials provider for system-assigned identity
 	cp, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-		CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-			TokenManagerOptions: manager.TokenManagerOptions{
-				ExpirationRefreshRatio: 0.001,           // Set to refresh very early
-				LowerRefreshBound:      time.Second * 1, // Set lower bound to 1 second
-			},
-		},
 		ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-			ManagedIdentityType:  identity.UserAssignedObjectID,
-			UserAssignedObjectID: cfg.AzureUserAssignedManagedID,
-			Scopes:               cfg.GetRedisScopes(),
+			ManagedIdentityType: identity.SystemAssignedIdentity,
 		},
 	})
 	if err != nil {

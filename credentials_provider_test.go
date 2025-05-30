@@ -20,7 +20,6 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 		// Create a test provider with invalid options
 		options := ConfidentialCredentialsProviderOptions{
 			CredentialsProviderOptions: CredentialsProviderOptions{
-				ClientID: "test-client-id",
 				TokenManagerOptions: manager.TokenManagerOptions{
 					ExpirationRefreshRatio: 0.7,
 				},
@@ -43,7 +42,6 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 		// Create a test provider with invalid options
 		options := ConfidentialCredentialsProviderOptions{
 			CredentialsProviderOptions: CredentialsProviderOptions{
-				ClientID: "test-client-id",
 				TokenManagerOptions: manager.TokenManagerOptions{
 					ExpirationRefreshRatio: 0.7,
 				},
@@ -66,7 +64,6 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 		// Create a test provider with invalid options
 		options := ManagedIdentityCredentialsProviderOptions{
 			CredentialsProviderOptions: CredentialsProviderOptions{
-				ClientID: "test-client-id",
 				TokenManagerOptions: manager.TokenManagerOptions{
 					ExpirationRefreshRatio: 0.7,
 				},
@@ -86,7 +83,6 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 		// Create a test provider with invalid options
 		options := DefaultAzureCredentialsProviderOptions{
 			CredentialsProviderOptions: CredentialsProviderOptions{
-				ClientID: "test-client-id",
 				TokenManagerOptions: manager.TokenManagerOptions{
 					ExpirationRefreshRatio: 0.7,
 				},
@@ -308,7 +304,6 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 	// Create a test provider
 	opts := ConfidentialCredentialsProviderOptions{
 		CredentialsProviderOptions: CredentialsProviderOptions{
-			ClientID: "test-client-id",
 			TokenManagerOptions: manager.TokenManagerOptions{
 				ExpirationRefreshRatio: 0.7,
 			},

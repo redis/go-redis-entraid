@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	config v0.0.0
-	github.com/redis/go-redis-entraid v1.0.2
+	github.com/redis/go-redis-entraid v1.0.1
 	github.com/redis/go-redis/v9 v9.9.0
 )
 

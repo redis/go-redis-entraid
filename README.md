@@ -61,8 +61,11 @@ func main() {
 
     // Create credentials provider
     provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-        CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-            ClientID: clientID,
+        CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
+        ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+            UserAssignedObjectID: clientID,
+            ManagedIdentityType:  identity.UserAssignedObjectID,
+            Scopes:               []string{identity.RedisScopeDefault},
         },
     })
     if err != nil {
@@ -214,13 +217,11 @@ AZURE_CLIENT_SECRET=your-client-secret
 ### Available Configuration Options
 
 #### 1. CredentialsProviderOptions
-Base options for all credential providers:
+Base options for credential providers includes the options for the token manager:
 ```go
 type CredentialsProviderOptions struct {
-    // Required: Client ID for authentication
-    ClientID string
-
-    // Optional: Token manager configuration
+    // TokenManagerOptions is the options for the token manager.
+    // This is used to configure the token manager when requesting a token.
     TokenManagerOptions manager.TokenManagerOptions
 }
 ```
@@ -275,7 +276,7 @@ type RetryOptions struct {
 ```
 
 #### 4. ManagedIdentityProviderOptions
-Options for managed identity authentication:
+Options for managed identity provider (user assigned or system assigned identity):
 ```go
 type ManagedIdentityProviderOptions struct {
     // Required: Type of managed identity
@@ -291,7 +292,7 @@ type ManagedIdentityProviderOptions struct {
 ```
 
 #### 5. ConfidentialIdentityProviderOptions
-Options for confidential client authentication:
+Options for confidential identity provider (client secret or client sertificate):
 ```go
 type ConfidentialIdentityProviderOptions struct {
     // Required: Client ID for authentication
@@ -355,7 +356,6 @@ type DefaultAzureIdentityProviderOptions struct {
 #### Basic Configuration
 ```go
 options := entraid.CredentialsProviderOptions{
-    ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
         LowerRefreshBounds: 10000,
@@ -366,7 +366,6 @@ options := entraid.CredentialsProviderOptions{
 #### Advanced Configuration
 ```go
 options := entraid.CredentialsProviderOptions{
-    ClientID: os.Getenv("AZURE_CLIENT_ID"),
     TokenManagerOptions: manager.TokenManagerOptions{
         ExpirationRefreshRatio: 0.7,
         LowerRefreshBounds: 10000,
@@ -414,6 +413,7 @@ authority := identity.AuthorityConfiguration{
 ```go
 // Create provider for system assigned identity
 provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
+    CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
     ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
         ManagedIdentityType: identity.SystemAssignedIdentity,
         Scopes: []string{"https://redis.azure.com/.default"},
@@ -425,9 +425,7 @@ provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedId
 ```go
 // Create provider for user assigned identity
 provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-    CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-        ClientID: os.Getenv("AZURE_CLIENT_ID"),
-    },
+    CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
     ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
         ManagedIdentityType: identity.UserAssignedObjectID,
         UserAssignedObjectID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
@@ -617,8 +615,11 @@ This approach gives you the flexibility of custom authentication while benefitin
 func TestManagedIdentityProvider(t *testing.T) {
     // Create test provider
     provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-        CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-            ClientID: "test-client-id",
+        CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
+        ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+            UserAssignedObjectID: "test-managed-id",
+            ManagedIdentityType:  identity.UserAssignedObjectID,
+            Scopes:               []string{identity.RedisScopeDefault},
         },
     })
     if err != nil {
@@ -652,8 +653,11 @@ func TestManagedIdentityProvider(t *testing.T) {
 func TestRedisConnection(t *testing.T) {
     // Create provider
     provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
-        CredentialsProviderOptions: entraid.CredentialsProviderOptions{
-            ClientID: os.Getenv("AZURE_CLIENT_ID"),
+        CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
+        ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+            UserAssignedObjectID: os.Getenv("AZURE_CLIENT_ID"),
+            ManagedIdentityType:  identity.UserAssignedObjectID,
+            Scopes:               []string{identity.RedisScopeDefault},
         },
     })
     if err != nil {

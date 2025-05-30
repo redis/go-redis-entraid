@@ -14,6 +14,10 @@ import (
 type CredentialsProviderOptions struct {
 	// ClientID is the client ID of the identity.
 	// This is used to identify the identity when requesting a token.
+	//
+	// Deprecated: This field is not used and will be removed in a future version.
+	// The ClientID should be part of the IdentityProvider options (e.g. ConfidentialIdentityProviderOptions, not the CredentialsProviderOptions)
+	// There is a ClientID in the ConfidentialIdentityProviderOptions and ManagedIdentityProviderOptions.
 	ClientID string
 
 	// TokenManagerOptions is the options for the token manager.
@@ -96,6 +100,12 @@ type ConfidentialCredentialsProviderOptions struct {
 // It uses client id and client credentials to authenticate with the identity provider.
 // The client credentials can be either a client secret or a client certificate.
 func NewConfidentialCredentialsProvider(options ConfidentialCredentialsProviderOptions) (auth.StreamingCredentialsProvider, error) {
+	// If the client ID is not provided in the confidential identity provider options, use the one from the credentials provider options.
+	// Those are duplicated and should be the same and the one in the credentials provider options is deprecated.
+	if options.ConfidentialIdentityProviderOptions.ClientID == "" {
+		options.ConfidentialIdentityProviderOptions.ClientID = options.CredentialsProviderOptions.ClientID
+	}
+
 	// Create a new identity provider using the client ID and client credentials.
 	idp, err := identity.NewConfidentialIdentityProvider(options.ConfidentialIdentityProviderOptions)
 	if err != nil {
