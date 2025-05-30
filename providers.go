@@ -17,7 +17,8 @@ type CredentialsProviderOptions struct {
 	//
 	// Deprecated: This field is not used and will be removed in a future version.
 	// The ClientID should be part of the IdentityProvider options (e.g. ConfidentialIdentityProviderOptions, not the CredentialsProviderOptions)
-	// There is a ClientID in the ConfidentialIdentityProviderOptions and ManagedIdentityProviderOptions.
+	// There is a ClientID in the ConfidentialIdentityProviderOptions that is a required field and should be set by the user.
+	// TODO(ndyakov): Remove this in v2.0.0
 	ClientID string
 
 	// TokenManagerOptions is the options for the token manager.
@@ -102,6 +103,7 @@ type ConfidentialCredentialsProviderOptions struct {
 func NewConfidentialCredentialsProvider(options ConfidentialCredentialsProviderOptions) (auth.StreamingCredentialsProvider, error) {
 	// If the client ID is not provided in the confidential identity provider options, use the one from the credentials provider options.
 	// Those are duplicated and should be the same and the one in the credentials provider options is deprecated.
+	// TODO(ndyakov): Remove this in a version v2.0.0 when ClientID is removed from CredentialsProviderOptions.
 	if options.ConfidentialIdentityProviderOptions.ClientID == "" {
 		options.ConfidentialIdentityProviderOptions.ClientID = options.CredentialsProviderOptions.ClientID
 	}
