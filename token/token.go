@@ -10,12 +10,22 @@ import (
 var _ auth.Credentials = (*Token)(nil)
 
 // New creates a new token with the specified username, password, raw token, expiration time, received at time, and time to live.
-// NOTE: This won't do any validation on the token, expiresOn, receivedAt, or ttl. It will simply create a new token instance.
-// The caller is responsible for ensuring the token is valid.
+// NOTE: The caller is responsible for ensuring the token is valid.
+// If the token is invalid, the behavior is undefined.
+// - if expiresOn is zero, New returns nil
+// - if receivedAt is zero, it will be set to the current time and TTL will be recalculated
 // Expiration time and TTL are used to determine when the token should be refreshed.
 // TTL is in milliseconds.
 // receivedAt + ttl should be within a millisecond of expiresOn
 func New(username, password, rawToken string, expiresOn, receivedAt time.Time, ttl int64) *Token {
+	if expiresOn.IsZero() {
+		return nil
+	}
+	if receivedAt.IsZero() {
+		receivedAt = time.Now()
+		ttl = expiresOn.Sub(receivedAt).Milliseconds()
+	}
+
 	return &Token{
 		username:   username,
 		password:   password,
@@ -28,6 +38,10 @@ func New(username, password, rawToken string, expiresOn, receivedAt time.Time, t
 
 // Token represents parsed authentication token used to access the Redis server.
 // It implements the auth.Credentials interface.
+//
+// WARNING: Use New() to create a new token.
+// Creating a token with Token{} is invalid and will undefined behavior in the TokenManager.
+// The zero value of Token is not valid.
 type Token struct {
 	// username is the username of the user.
 	username string
@@ -60,11 +74,6 @@ func (t *Token) RawToken() string {
 
 // ReceivedAt returns the time when the token was received.
 func (t *Token) ReceivedAt() time.Time {
-	if t.receivedAt.IsZero() {
-		// set it to now, recalculate ttl
-		t.receivedAt = time.Now()
-		t.ttl = t.expiresOn.Sub(t.receivedAt).Milliseconds()
-	}
 	return t.receivedAt
 }
 
