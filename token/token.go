@@ -17,13 +17,10 @@ var _ auth.Credentials = (*Token)(nil)
 // Expiration time and TTL are used to determine when the token should be refreshed.
 // TTL is in milliseconds.
 // receivedAt + ttl should be within a millisecond of expiresOn
-// If receivedAt is zero, it will be set to the current time and TTL will be recalculated.
 func New(username, password, rawToken string, expiresOn, receivedAt time.Time, ttl int64) *Token {
-	// If expiresOn is zero, return nil to avoid panic in ReceivedAt()
 	if expiresOn.IsZero() {
 		return nil
 	}
-	// If receivedAt is zero, set it to now and recalculate TTL to avoid race conditions in ReceivedAt()
 	if receivedAt.IsZero() {
 		receivedAt = time.Now()
 		ttl = expiresOn.Sub(receivedAt).Milliseconds()
