@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testDurationDelta = float64(5 * time.Millisecond)
+
 func TestDurationToRenewal(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -236,7 +238,7 @@ func TestDurationToRenewal(t *testing.T) {
 			}
 
 			duration := manager.durationToRenewal(tt.token)
-			assert.InDelta(t, float64(tt.expectedDuration), float64(duration), float64(time.Millisecond),
+			assert.InDelta(t, float64(tt.expectedDuration), float64(duration), testDurationDelta,
 				"%s: expected %v, got %v", tt.name, tt.expectedDuration, duration)
 		})
 	}
@@ -415,7 +417,7 @@ func TestDurationToRenewalMillisecondPrecision(t *testing.T) {
 			}
 
 			duration := manager.durationToRenewal(tt.token)
-			assert.InDelta(t, float64(tt.expectedDuration), float64(duration), float64(time.Millisecond),
+			assert.InDelta(t, float64(tt.expectedDuration), float64(duration), testDurationDelta,
 				"%s: expected %v, got %v", tt.name, tt.expectedDuration, duration)
 		})
 	}
@@ -453,8 +455,8 @@ func TestDurationToRenewalConcurrent(t *testing.T) {
 		if i == 0 {
 			firstResult = result
 		} else {
-			// All results should be within 10ms of each other
-			assert.InDelta(t, firstResult.Milliseconds(), result.Milliseconds(), 10)
+			// All results should be within 5ms of each other
+			assert.InDelta(t, firstResult.Milliseconds(), result.Milliseconds(), 5)
 		}
 	}
 }
