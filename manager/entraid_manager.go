@@ -148,6 +148,16 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 	e.listener = listener
 
 	go func(listener TokenListener, closed <-chan struct{}) {
+		// Add panic recovery to prevent crashes
+		defer func() {
+			if r := recover(); r != nil {
+				// Attempt to notify listener of panic, but don't panic again if that fails
+				func() {
+					defer func() { _ = recover() }()
+					listener.OnError(fmt.Errorf("token manager goroutine panic: %v", r))
+				}()
+			}
+		}()
 		maxDelay := e.retryOptions.MaxDelay
 		initialDelay := e.retryOptions.InitialDelay
 
@@ -223,6 +233,7 @@ func (e *entraidTokenManager) stop() (err error) {
 			err = fmt.Errorf("failed to stop token manager: %s", r)
 		}
 	}()
+
 	if e.ctxCancel != nil {
 		e.ctxCancel()
 	}
@@ -232,7 +243,11 @@ func (e *entraidTokenManager) stop() (err error) {
 	}
 
 	e.listener = nil
-	close(e.closedChan)
+
+	// Safely close the channel - only close if not already closed
+	if !internal.IsClosed(e.closedChan) {
+		close(e.closedChan)
+	}
 
 	return nil
 }
