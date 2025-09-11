@@ -35,9 +35,12 @@ type entraidCredentialsProvider struct {
 // It notifies all registered listeners with the new token.
 func (e *entraidCredentialsProvider) onTokenNext(t *token.Token) {
 	e.rwLock.RLock()
-	defer e.rwLock.RUnlock()
+	// Make a deep copy of the listeners slice to avoid data race
+	listeners := make([]auth.CredentialsListener, len(e.listeners))
+	copy(listeners, e.listeners)
+	e.rwLock.RUnlock()
 	// Notify all listeners with the new token.
-	for _, listener := range e.listeners {
+	for _, listener := range listeners {
 		listener.OnNext(t)
 	}
 }
@@ -46,10 +49,13 @@ func (e *entraidCredentialsProvider) onTokenNext(t *token.Token) {
 // It notifies all registered listeners with the error.
 func (e *entraidCredentialsProvider) onTokenError(err error) {
 	e.rwLock.RLock()
-	defer e.rwLock.RUnlock()
+	// Make a deep copy of the listeners slice to avoid data race
+	listeners := make([]auth.CredentialsListener, len(e.listeners))
+	copy(listeners, e.listeners)
+	e.rwLock.RUnlock()
 
 	// Notify all listeners with the error
-	for _, listener := range e.listeners {
+	for _, listener := range listeners {
 		listener.OnError(err)
 	}
 }
