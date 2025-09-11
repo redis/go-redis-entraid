@@ -15,10 +15,6 @@ package entraid
 // 5. Unsubscribe tries to acquire Lock while RLock is still held
 // 6. Deadlock occurs, blocking token refresh indefinitely
 //
-// Test Status:
-// - Tests currently FAIL (as expected) because the deadlock bug is present
-// - Tests should PASS after the deadlock bug is fixed
-//
 // To reproduce the bug in real scenarios:
 // 1. Set up Redis with authentication
 // 2. Use StreamingCredentialsProvider with token refresh
