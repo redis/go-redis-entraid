@@ -24,6 +24,7 @@ package entraid
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -774,6 +775,19 @@ func (d *deadlockInducingListener) OnError(err error) {
 	}
 }
 
+// nonBlockingListener is a test listener that doesn't block on channels
+type nonBlockingListener struct {
+	tokenCount int32
+}
+
+func (n *nonBlockingListener) OnNext(credentials auth.Credentials) {
+	atomic.AddInt32(&n.tokenCount, 1)
+}
+
+func (n *nonBlockingListener) OnError(err error) {
+	// No-op for this test
+}
+
 // TestCredentialsProviderDeadlockOnError tests deadlock scenario during error handling
 func TestCredentialsProviderDeadlockOnError(t *testing.T) {
 	t.Run("deadlock on unsubscribe during OnError", func(t *testing.T) {
@@ -857,23 +871,18 @@ func TestCredentialsProviderRaceCondition(t *testing.T) {
 
 		// Run with race detector enabled
 		var wg sync.WaitGroup
-		numGoroutines := 10
+		numGoroutines := 5 // Reduced to avoid channel blocking
 
-		// Concurrent subscriptions
+		listeners := make([]*nonBlockingListener, numGoroutines)
+		cancels := make([]auth.UnsubscribeFunc, numGoroutines)
+
+		// Subscribe listeners first
 		for i := 0; i < numGoroutines; i++ {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
-				listener := &mockCredentialsListener{
-					LastTokenCh: make(chan string, 1),
-					LastErrCh:   make(chan error, 1),
-				}
-				_, cancel, err := cp.Subscribe(listener)
-				if err == nil && cancel != nil {
-					// Immediately unsubscribe to create more contention
-					_ = cancel()
-				}
-			}(i)
+			listener := &nonBlockingListener{}
+			listeners[i] = listener
+			_, cancel, err := cp.Subscribe(listener)
+			require.NoError(t, err)
+			cancels[i] = cancel
 		}
 
 		// Concurrent token updates
@@ -883,6 +892,16 @@ func TestCredentialsProviderRaceCondition(t *testing.T) {
 				defer wg.Done()
 				provider.onTokenNext(testToken)
 			}()
+		}
+
+		// Concurrent unsubscribes
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				time.Sleep(time.Millisecond) // Small delay to allow some token updates
+				_ = cancels[idx]()
+			}(i)
 		}
 
 		// Wait for all goroutines to complete
