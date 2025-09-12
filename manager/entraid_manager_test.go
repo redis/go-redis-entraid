@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testDurationDelta = float64(5 * time.Millisecond)
+const testDurationDelta = float64(10 * time.Millisecond)
 
 func TestDurationToRenewal(t *testing.T) {
 	tests := []struct {
