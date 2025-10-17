@@ -22,6 +22,7 @@ type TokenManagerOptions struct {
 	//
 	// default: 0.7
 	ExpirationRefreshRatio float64
+
 	// LowerRefreshBound is the lower bound for the refresh time
 	// Represents the minimum time before token expiration to trigger a refresh.
 	// This value sets a fixed lower bound for when a token refresh should occur, regardless
