@@ -160,3 +160,51 @@ func TestAuthorityConfigurationDefaultAuthorityTypeWithTenantID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "https://login.microsoftonline.com/12345", result)
 }
+
+// TestIssueScenario tests the exact scenario reported in the GitHub issue:
+// Single-tenant application should use AuthorityTypeDefault with a specific tenant ID
+// and should produce a tenant-specific authority URL (not /common)
+func TestIssueScenario(t *testing.T) {
+	t.Parallel()
+
+	// This is the configuration from the issue report
+	// that should produce a tenant-specific authority URL
+	tenantID := "test-tenant-id-123"
+
+	// Single-tenant application configuration as documented
+	ac := AuthorityConfiguration{
+		AuthorityType: AuthorityTypeDefault,
+		TenantID:      tenantID,
+	}
+
+	authority, err := ac.getAuthority()
+
+	// Should not error
+	assert.NoError(t, err)
+
+	// Should produce tenant-specific URL, NOT /common
+	expectedAuthority := "https://login.microsoftonline.com/test-tenant-id-123"
+	assert.Equal(t, expectedAuthority, authority, "Single-tenant application should use tenant-specific authority URL")
+
+	// Verify it's NOT the common endpoint
+	assert.NotEqual(t, "https://login.microsoftonline.com/common", authority, "Single-tenant application should NOT use /common endpoint")
+}
+
+// TestMultiTenantScenario tests that multi-tenant applications use the common endpoint
+func TestMultiTenantScenario(t *testing.T) {
+	t.Parallel()
+
+	// Multi-tenant application configuration as documented
+	ac := AuthorityConfiguration{
+		AuthorityType: AuthorityTypeMultiTenant,
+	}
+
+	authority, err := ac.getAuthority()
+
+	// Should not error
+	assert.NoError(t, err)
+
+	// Should produce /common URL for multi-tenant
+	expectedAuthority := "https://login.microsoftonline.com/common"
+	assert.Equal(t, expectedAuthority, authority, "Multi-tenant application should use /common endpoint")
+}
