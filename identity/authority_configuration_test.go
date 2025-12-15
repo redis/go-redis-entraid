@@ -19,14 +19,14 @@ func TestAuthorityConfiguration(t *testing.T) {
 		{
 			name:          "Default Authority",
 			authorityType: AuthorityTypeDefault,
-			expected:      "https://login.microsoftonline.com/common",
+			tenantID:      "12345",
+			expected:      "https://login.microsoftonline.com/12345",
 			expectError:   false,
 		},
 		{
 			name:          "Multi-Tenant Authority",
 			authorityType: AuthorityTypeMultiTenant,
-			tenantID:      "12345",
-			expected:      "https://login.microsoftonline.com/12345",
+			expected:      "https://login.microsoftonline.com/common",
 			expectError:   false,
 		},
 		{
@@ -42,8 +42,8 @@ func TestAuthorityConfiguration(t *testing.T) {
 			expectError:   true,
 		},
 		{
-			name:          "Missing Tenant ID for Multi-Tenant",
-			authorityType: AuthorityTypeMultiTenant,
+			name:          "Missing Tenant ID for Default",
+			authorityType: AuthorityTypeDefault,
 			expectError:   true,
 		},
 		{
@@ -52,8 +52,8 @@ func TestAuthorityConfiguration(t *testing.T) {
 			expectError:   true,
 		},
 		{
-			name:          "Default Authority Type with Tenant ID",
-			authorityType: AuthorityTypeDefault,
+			name:          "Multi-Tenant Authority Type with Tenant ID",
+			authorityType: AuthorityTypeMultiTenant,
 			tenantID:      "12345",
 			expected:      "https://login.microsoftonline.com/common",
 			expectError:   false,
@@ -80,21 +80,23 @@ func TestAuthorityConfiguration(t *testing.T) {
 
 func TestAuthorityConfigurationDefault(t *testing.T) {
 	t.Parallel()
-	ac := AuthorityConfiguration{}
+	ac := AuthorityConfiguration{
+		AuthorityType: AuthorityTypeDefault,
+		TenantID:      "12345",
+	}
 	result, err := ac.getAuthority()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://login.microsoftonline.com/common", result)
+	assert.Equal(t, "https://login.microsoftonline.com/12345", result)
 }
 
 func TestAuthorityConfigurationMultiTenant(t *testing.T) {
 	t.Parallel()
 	ac := AuthorityConfiguration{
 		AuthorityType: AuthorityTypeMultiTenant,
-		TenantID:      "12345",
 	}
 	result, err := ac.getAuthority()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://login.microsoftonline.com/12345", result)
+	assert.Equal(t, "https://login.microsoftonline.com/common", result)
 }
 
 func TestAuthorityConfigurationCustom(t *testing.T) {
@@ -121,7 +123,7 @@ func TestAuthorityConfigurationInvalid(t *testing.T) {
 func TestAuthorityConfigurationMissingTenantID(t *testing.T) {
 	t.Parallel()
 	ac := AuthorityConfiguration{
-		AuthorityType: AuthorityTypeMultiTenant,
+		AuthorityType: AuthorityTypeDefault,
 	}
 	result, err := ac.getAuthority()
 	assert.Error(t, err)
@@ -145,7 +147,7 @@ func TestAuthorityConfigurationDefaultAuthorityType(t *testing.T) {
 	}
 	result, err := ac.getAuthority()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://login.microsoftonline.com/common", result)
+	assert.Equal(t, "https://login.microsoftonline.com/12345", result)
 }
 
 func TestAuthorityConfigurationDefaultAuthorityTypeWithTenantID(t *testing.T) {
@@ -156,5 +158,5 @@ func TestAuthorityConfigurationDefaultAuthorityTypeWithTenantID(t *testing.T) {
 	}
 	result, err := ac.getAuthority()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://login.microsoftonline.com/common", result)
+	assert.Equal(t, "https://login.microsoftonline.com/12345", result)
 }

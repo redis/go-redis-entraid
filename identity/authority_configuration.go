@@ -42,12 +42,12 @@ func (a AuthorityConfiguration) getAuthority() (string, error) {
 
 	switch a.AuthorityType {
 	case AuthorityTypeDefault:
-		return "https://login.microsoftonline.com/common", nil
-	case AuthorityTypeMultiTenant:
 		if a.TenantID == "" {
-			return "", fmt.Errorf("tenant ID is required when using multi-tenant authority type")
+			return "", fmt.Errorf("tenant ID is required when using default authority type")
 		}
 		return fmt.Sprintf("https://login.microsoftonline.com/%s", a.TenantID), nil
+	case AuthorityTypeMultiTenant:
+		return "https://login.microsoftonline.com/common", nil
 	case AuthorityTypeCustom:
 		if a.Authority == "" {
 			return "", fmt.Errorf("authority is required when using custom authority type")

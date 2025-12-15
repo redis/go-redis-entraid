@@ -21,7 +21,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			CredentialsType: "ClientSecret",
 			ClientSecret:    "client-secret",
 			Scopes:          []string{"scope1", "scope2"},
-			Authority:       AuthorityConfiguration{},
+			Authority:       AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		provider, err := NewConfidentialIdentityProvider(opts)
 		if err != nil {
@@ -43,7 +43,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			ClientCert:              []*x509.Certificate{{}},
 			ClientPrivateKey:        "private-key",
 			Scopes:                  []string{"scope1", "scope2"},
-			Authority:               AuthorityConfiguration{},
+			Authority:               AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 			confidentialCredFactory: credFactory,
 		}
 		credFactory.On("NewCredFromCert", opts.ClientCert, opts.ClientPrivateKey).Return(confidential.Credential{}, nil)
@@ -61,7 +61,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			ClientCert:       []*x509.Certificate{{}},
 			ClientPrivateKey: "private-key",
 			Scopes:           []string{"scope1", "scope2"},
-			Authority:        AuthorityConfiguration{},
+			Authority:        AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		// invalid certificate should fail
 		provider, err := NewConfidentialIdentityProvider(opts)
@@ -76,7 +76,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			CredentialsType: "invalid-credentials-type",
 			ClientSecret:    "client-secret",
 			Scopes:          []string{"scope1", "scope2"},
-			Authority:       AuthorityConfiguration{},
+			Authority:       AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		provider, err := NewConfidentialIdentityProvider(opts)
 		if err == nil {
@@ -150,7 +150,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			CredentialsType:         "ClientSecret",
 			ClientSecret:            "client-secret",
 			Scopes:                  []string{"scope1", "scope2"},
-			Authority:               AuthorityConfiguration{},
+			Authority:               AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 			confidentialCredFactory: credFactory,
 		}
 		credFactory.On("NewCredFromSecret", "client-secret").Return(confidential.Credential{}, fmt.Errorf("error creating credential"))
@@ -174,7 +174,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			ClientCert:       nil,
 			ClientPrivateKey: "private key",
 			Scopes:           []string{"scope1", "scope2"},
-			Authority:        AuthorityConfiguration{},
+			Authority:        AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		provider, err := NewConfidentialIdentityProvider(opts)
 		if err == nil {
@@ -195,7 +195,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			ClientCert:       []*x509.Certificate{{}},
 			ClientPrivateKey: nil,
 			Scopes:           []string{"scope1", "scope2"},
-			Authority:        AuthorityConfiguration{},
+			Authority:        AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		provider, err := NewConfidentialIdentityProvider(opts)
 		if err == nil {
@@ -213,7 +213,7 @@ func TestNewConfidentialIdentityProvider(t *testing.T) {
 			ClientID:        "client-id",
 			CredentialsType: "ClientSecret",
 			ClientSecret:    "client-secret",
-			Authority:       AuthorityConfiguration{},
+			Authority:       AuthorityConfiguration{AuthorityType: AuthorityTypeMultiTenant},
 		}
 		provider, err := NewConfidentialIdentityProvider(opts)
 		if err != nil {

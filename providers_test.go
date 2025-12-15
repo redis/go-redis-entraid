@@ -120,7 +120,7 @@ func TestNewConfidentialCredentialsProvider(t *testing.T) {
 					CredentialsType: identity.ClientSecretCredentialType,
 					ClientSecret:    "test-secret",
 					Scopes:          []string{identity.RedisScopeDefault},
-					Authority:       identity.AuthorityConfiguration{},
+					Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 				},
 			},
 			expectedError: nil,
@@ -310,7 +310,7 @@ func TestCredentialsProviderInterface(t *testing.T) {
 						CredentialsType: identity.ClientSecretCredentialType,
 						ClientSecret:    "test-secret",
 						Scopes:          []string{identity.RedisScopeDefault},
-						Authority:       identity.AuthorityConfiguration{},
+						Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 					},
 				}
 
@@ -414,7 +414,7 @@ func TestNewConfidentialCredentialsProvider_TokenManagerFactoryError(t *testing.
 			CredentialsType: identity.ClientSecretCredentialType,
 			ClientSecret:    "test-secret",
 			Scopes:          []string{identity.RedisScopeDefault},
-			Authority:       identity.AuthorityConfiguration{},
+			Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 		},
 	}
 
@@ -505,7 +505,7 @@ func TestNewConfidentialCredentialsProvider_TokenManagerStartError(t *testing.T)
 			CredentialsType: identity.ClientSecretCredentialType,
 			ClientSecret:    "test-secret",
 			Scopes:          []string{identity.RedisScopeDefault},
-			Authority:       identity.AuthorityConfiguration{},
+			Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 		},
 	}
 
