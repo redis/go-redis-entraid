@@ -38,7 +38,7 @@ func main() {
 			ClientSecret:    cfg.AzureClientSecret,
 			CredentialsType: identity.ClientSecretCredentialType,
 			Authority: identity.AuthorityConfiguration{
-				AuthorityType: identity.AuthorityTypeMultiTenant,
+				AuthorityType: identity.AuthorityTypeDefault,
 				TenantID:      cfg.AzureTenantID,
 			},
 			Scopes: cfg.GetRedisScopes(),

@@ -52,7 +52,7 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 				CredentialsType: "invalid-type", // Invalid credentials type
 				ClientSecret:    "test-secret",
 				Scopes:          []string{identity.RedisScopeDefault},
-				Authority:       identity.AuthorityConfiguration{},
+				Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 			},
 		}
 
@@ -74,7 +74,7 @@ func TestCredentialsProviderErrorScenarios(t *testing.T) {
 				CredentialsType: identity.ClientSecretCredentialType,
 				ClientSecret:    "", // Empty client secret
 				Scopes:          []string{identity.RedisScopeDefault},
-				Authority:       identity.AuthorityConfiguration{},
+				Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 			},
 		}
 
@@ -336,7 +336,7 @@ func TestCredentialsProviderSubscribe(t *testing.T) {
 			CredentialsType: identity.ClientSecretCredentialType,
 			ClientSecret:    "test-secret",
 			Scopes:          []string{identity.RedisScopeDefault},
-			Authority:       identity.AuthorityConfiguration{},
+			Authority:       identity.AuthorityConfiguration{AuthorityType: identity.AuthorityTypeMultiTenant},
 		},
 	}
 	t.Run("double subscribe and cancel resubscribe", func(t *testing.T) {

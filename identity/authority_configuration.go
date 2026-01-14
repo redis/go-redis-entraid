@@ -3,15 +3,16 @@ package identity
 import "fmt"
 
 const (
-	// AuthorityTypeDefault is the default authority type.
-	// This is used to specify the authority type when requesting a token.
+	// AuthorityTypeDefault is the default authority type for single-tenant applications.
+	// This type requires a specific tenant ID and constructs the authority URL as:
+	// https://login.microsoftonline.com/{tenantID}
 	AuthorityTypeDefault = "default"
 	// AuthorityTypeMultiTenant is the multi-tenant authority type.
-	// This is used to specify the multi-tenant authority type when requesting a token.
-	// This type of authority is used to authenticate the identity when requesting a token.
+	// This type uses the "common" endpoint and allows authentication from any Azure AD tenant:
+	// https://login.microsoftonline.com/common
 	AuthorityTypeMultiTenant = "multi-tenant"
 	// AuthorityTypeCustom is the custom authority type.
-	// This is used to specify the custom authority type when requesting a token.
+	// This type allows specifying a custom authority URL for specialized scenarios.
 	AuthorityTypeCustom = "custom"
 )
 
@@ -28,7 +29,8 @@ type AuthorityConfiguration struct {
 	Authority string
 
 	// TenantID is the tenant ID of the identity provider.
-	// This is used to identify the tenant when requesting a token.
+	// Required for AuthorityTypeDefault to identify the specific Azure AD tenant.
+	// Optional for AuthorityTypeMultiTenant (ignored, uses "common" endpoint).
 	// This is typically the ID of the Azure Active Directory tenant.
 	TenantID string
 }
@@ -42,12 +44,12 @@ func (a AuthorityConfiguration) getAuthority() (string, error) {
 
 	switch a.AuthorityType {
 	case AuthorityTypeDefault:
-		return "https://login.microsoftonline.com/common", nil
-	case AuthorityTypeMultiTenant:
 		if a.TenantID == "" {
-			return "", fmt.Errorf("tenant ID is required when using multi-tenant authority type")
+			return "", fmt.Errorf("tenant ID is required when using default authority type")
 		}
 		return fmt.Sprintf("https://login.microsoftonline.com/%s", a.TenantID), nil
+	case AuthorityTypeMultiTenant:
+		return "https://login.microsoftonline.com/common", nil
 	case AuthorityTypeCustom:
 		if a.Authority == "" {
 			return "", fmt.Errorf("authority is required when using custom authority type")

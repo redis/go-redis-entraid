@@ -328,8 +328,8 @@ type AuthorityConfiguration struct {
     // Required: Type of authority
     AuthorityType AuthorityType // "default", "multi-tenant", or "custom"
 
-    // Required: Azure AD tenant ID
-    // Use "common" for multi-tenant applications
+    // Required for default authority: Azure AD tenant ID
+    // Optional for multi-tenant authority (uses "common" endpoint)
     TenantID string
 
     // Optional: Custom authority URL
@@ -388,7 +388,6 @@ options := entraid.CredentialsProviderOptions{
 // Multi-tenant application
 authority := identity.AuthorityConfiguration{
     AuthorityType: identity.AuthorityTypeMultiTenant,
-    TenantID: "common",
 }
 
 // Single-tenant application
