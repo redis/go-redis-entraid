@@ -26,7 +26,7 @@ jobs:
         name: code-coverage
         path: cover.out # Make sure to use the same file name you chose for the "-coverprofile" in the "Test" step
     - name: Check coverage
-      uses: vladopajic/go-test-coverage@v2.18.1
+      uses: vladopajic/go-test-coverage@v2
       with:
         config: ./.testcoverage.yml
   code_coverage:
