@@ -1,11 +1,15 @@
 package manager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis-entraid/shared"
@@ -29,6 +33,9 @@ var defaultIsRetryable = func(err error) bool {
 	if err == nil {
 		return true
 	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
 
 	var netErr net.Error
 	if errors.As(err, &netErr) {
@@ -43,7 +50,38 @@ var defaultIsRetryable = func(err error) bool {
 		}
 	}
 
-	return errors.Is(err, os.ErrDeadlineExceeded)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+
+	// Azure Identity v1.10.0's ChainedTokenCredential converts source errors
+	// to AuthenticationFailedError without preserving them in Unwrap(). Only
+	// recognize explicit timeout/deadline diagnostics; other authentication
+	// failures (including permission and configuration errors) stay terminal.
+	var authErr *azidentity.AuthenticationFailedError
+	if errors.As(err, &authErr) {
+		message := strings.ToLower(authErr.Error())
+		if strings.Contains(message, "context canceled") || strings.Contains(message, "context cancelled") {
+			return false
+		}
+		if strings.Contains(message, "i/o timeout") ||
+			strings.Contains(message, "timed out") ||
+			strings.Contains(message, "deadline exceeded") {
+			return true
+		}
+		// net.DNSError with Err == "timeout" formats as "lookup ...:
+		// timeout". Azure's chain retains that diagnostic but loses the
+		// Timeout method, so recognize this specific DNS error shape too.
+		for _, line := range strings.Split(message, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "lookup ") && strings.HasSuffix(line, ": timeout") {
+				return true
+			}
+		}
+		return false
+	}
+
+	return false
 }
 
 // defaultRetryOptionsOr returns the default retry options if the provided options are not set.
