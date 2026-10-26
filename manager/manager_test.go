@@ -14,7 +14,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// testJWTToken is a JWT token for testing
+// testJWTTokenTemplate is a JWT token used as a claims template for tests.
+// Its "exp" is in the past; use testJWTToken or newTestJWTToken for a valid token.
 //
 //	{
 //	 "iss": "test jwt",
@@ -26,7 +27,7 @@ import (
 //	}
 //
 // key: qwertyuiopasdfghjklzxcvbnm123456
-const testJWTToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJ0ZXN0IGp3dCIsImlhdCI6MTc0MzUxNTAxMSwiZXhwIjoxNzc1MDUxMDExLCJhdWQiOiJ3d3cuZXhhbXBsZS5jb20iLCJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwib2lkIjoidGVzdCJ9.6RG721V2eFlSLsCRmo53kSRRrTZIe1UPdLZCUEvIarU"
+const testJWTTokenTemplate = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJ0ZXN0IGp3dCIsImlhdCI6MTc0MzUxNTAxMSwiZXhwIjoxNzc1MDUxMDExLCJhdWQiOiJ3d3cuZXhhbXBsZS5jb20iLCJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwib2lkIjoidGVzdCJ9.6RG721V2eFlSLsCRmo53kSRRrTZIe1UPdLZCUEvIarU"
 
 // testJWTExpiredToken is an expired JWT token for testing
 //
@@ -55,6 +56,10 @@ const testJWTExpiredToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJ0ZX
 // key: qwertyuiopasdfghjklzxcvbnm123456
 const testJWTWithZeroExpiryToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJ0ZXN0IGp3dCIsImlhdCI6MTc0NDAyNTk0NCwiZXhwIjpudWxsLCJhdWQiOiJ3d3cuZXhhbXBsZS5jb20iLCJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwib2lkIjoidGVzdCJ9.bLSANIzawE5Y6rgspvvUaRhkBq6Y4E0ggjXlmHRn8ew"
 
+// testJWTToken is a valid JWT token for testing. It is generated at init so
+// it does not expire.
+var testJWTToken = newTestJWTToken(time.Now().Add(365 * 24 * time.Hour))
+
 var testTokenValid = token.New(
 	"test",
 	"password",
@@ -72,7 +77,7 @@ func newTestJWTToken(expiresOn time.Time) string {
 
 	// Parse the token to extract claims, but note that signature verification
 	// should be handled by the identity provider
-	_, _, err := jwt.NewParser().ParseUnverified(testJWTToken, &claims)
+	_, _, err := jwt.NewParser().ParseUnverified(testJWTTokenTemplate, &claims)
 	if err != nil {
 		panic(err)
 	}
@@ -91,7 +96,7 @@ func newTestJWTTokenWithoutOID(expiresOn time.Time) string {
 
 	// Parse the token to extract claims, but note that signature verification
 	// should be handled by the identity provider
-	_, _, err := jwt.NewParser().ParseUnverified(testJWTToken, &claims)
+	_, _, err := jwt.NewParser().ParseUnverified(testJWTTokenTemplate, &claims)
 	if err != nil {
 		panic(err)
 	}
