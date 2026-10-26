@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -24,6 +25,8 @@ const (
 	DefaultRetryOptionsInitialDelay      = 1000 * time.Millisecond
 	DefaultRetryOptionsMaxDelay          = 10000 * time.Millisecond
 )
+
+var azureDNSLookupTimeout = regexp.MustCompile(`^(?:[A-Za-z]+ "[^"]+": )?dial tcp: lookup [^:\s]*: timeout$|^lookup [^:\s]*: timeout$`)
 
 // defaultIsRetryable is a function that checks if the error is retriable.
 // It takes an error as an argument and returns a boolean value.
@@ -69,12 +72,12 @@ var defaultIsRetryable = func(err error) bool {
 			strings.Contains(message, "deadline exceeded") {
 			return true
 		}
-		// net.DNSError with Err == "timeout" formats as "lookup ...:
-		// timeout". Azure's chain retains that diagnostic but loses the
-		// Timeout method, so recognize this specific DNS error shape too.
+		// net.DNSError with Err == "timeout" loses its Timeout method when
+		// Azure Identity formats the chained credential error. Match only the
+		// exact DNS diagnostic, optionally wrapped by the standard net.OpError
+		// and url.Error formatting.
 		for _, line := range strings.Split(message, "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "lookup ") && strings.HasSuffix(line, ": timeout") {
+			if azureDNSLookupTimeout.MatchString(strings.TrimSpace(line)) {
 				return true
 			}
 		}
