@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"reflect"
@@ -370,7 +369,6 @@ func TestTokenManager_Start(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.NotPanics(t, func() {
-			last := &atomic.Int32{}
 			wg := &sync.WaitGroup{}
 
 			idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
@@ -383,7 +381,6 @@ func TestTokenManager_Start(t *testing.T) {
 					defer wg.Done()
 					var err error
 					time.Sleep(time.Duration(int64(rand.Intn(1000)+(300-int(num)/2)) * int64(time.Millisecond)))
-					last.Store(num)
 					if num%2 == 0 {
 						err = tm.stop()
 					} else {
@@ -400,24 +397,13 @@ func TestTokenManager_Start(t *testing.T) {
 				}(i)
 			}
 			wg.Wait()
-			lastExecution := last.Load()
-			if lastExecution%2 == 0 {
-				if tm.listener != nil {
-					l := tm.listener.(*mockTokenListener)
-					log.Printf("FAILING WITH lastExecution [STARTED]:[LISTENER:%d]: %d", l.Id, lastExecution)
-				}
-				assert.Nil(t, tm.listener)
-			} else {
-				if tm.listener == nil {
-					log.Printf("FAILING WITH lastExecution[STOPPED]: %d", lastExecution)
-				}
-				assert.NotNil(t, tm.listener)
+			// The goroutines race, so the final state can be either started or
+			// stopped. Check that it is consistent and can be cleaned up.
+			if tm.listener != nil {
 				stopper, err := tokenManager.Start(listener)
 				assert.Nil(t, stopper)
-				assert.Error(t, err)
-				// Stop the token manager with internal stop, since stopper should be nil
-				err = tm.stop()
-				assert.Nil(t, err)
+				assert.ErrorIs(t, err, ErrTokenManagerAlreadyStarted)
+				assert.NoError(t, tm.stop())
 			}
 			assert.Nil(t, tm.listener)
 		})
