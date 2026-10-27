@@ -26,7 +26,7 @@ const (
 	DefaultRetryOptionsMaxDelay          = 10000 * time.Millisecond
 )
 
-var azureDNSLookupTimeout = regexp.MustCompile(`^(?:[A-Za-z]+ "[^"]+": )?dial tcp: lookup [^:\s]*: timeout$|^lookup [^:\s]*: timeout$`)
+var azureDNSLookupTimeout = regexp.MustCompile(`^(?:[a-z]+ "[^"]+": )?(?:dial tcp: )?lookup [^:\s]*(?: on \S+)?: timeout$`)
 
 // defaultIsRetryable is a function that checks if the error is retriable.
 // It takes an error as an argument and returns a boolean value.

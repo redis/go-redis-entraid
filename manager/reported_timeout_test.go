@@ -99,29 +99,35 @@ func TestAzureChainedNonDNSLookupTimeoutRemainsTerminal(t *testing.T) {
 }
 
 func TestAzureChainedWrappedDNSLookupTimeoutIsRetryable(t *testing.T) {
-	dnsErr := &net.DNSError{Err: "timeout", Name: "redis.example"}
-	opErr := &net.OpError{Op: "dial", Net: "tcp", Err: dnsErr}
-	tests := []struct {
-		name string
-		err  error
-	}{
-		{name: "bare DNS error", err: dnsErr},
-		{name: "dial operation error", err: opErr},
-		{name: "URL error", err: &url.Error{Op: "Get", URL: "https://redis.example", Err: opErr}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			credential, err := azidentity.NewChainedTokenCredential([]azcore.TokenCredential{diagnosticCredential{err: tt.err}}, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = credential.GetToken(context.Background(), policy.TokenRequestOptions{Scopes: []string{"https://redis.azure.com/.default"}})
-			if err == nil {
-				t.Fatal("expected credential failure")
-			}
-			if !defaultIsRetryable(err) {
-				t.Fatalf("wrapped DNS lookup timeout became nonretryable: %T: %v", err, err)
+	for _, resolver := range []string{"", "10.0.0.53:53", "[2001:db8::53]:53"} {
+		name := resolver
+		if name == "" {
+			name = "no resolver"
+		}
+		t.Run(name, func(t *testing.T) {
+			dnsErr := &net.DNSError{Err: "timeout", Name: "redis.example", Server: resolver, IsTimeout: true}
+			opErr := &net.OpError{Op: "dial", Net: "tcp", Err: dnsErr}
+			for _, tt := range []struct {
+				name string
+				err  error
+			}{
+				{"bare DNS error", dnsErr},
+				{"dial operation error", opErr},
+				{"URL error", &url.Error{Op: "Get", URL: "https://redis.example", Err: opErr}},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					credential, err := azidentity.NewChainedTokenCredential([]azcore.TokenCredential{diagnosticCredential{err: tt.err}}, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = credential.GetToken(context.Background(), policy.TokenRequestOptions{Scopes: []string{"https://redis.azure.com/.default"}})
+					if err == nil {
+						t.Fatal("expected credential failure")
+					}
+					if !defaultIsRetryable(err) {
+						t.Fatalf("DNS timeout incorrectly terminal: %v", err)
+					}
+				})
 			}
 		})
 	}
