@@ -45,6 +45,9 @@ type entraidCredentialsProvider struct {
 	operation     *managerOperation
 	stopFailed    bool
 	stopRequested bool
+	closed        bool
+	closeAttempt  *providerCloseAttempt
+	closeErr      error
 }
 
 type managerOperation struct {
@@ -123,6 +126,9 @@ type contextTokenManager interface {
 func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) error {
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
+	if e.closed {
+		return fmt.Errorf("credentials provider is closed")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -268,6 +274,10 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
 	}
 	e.stateMu.Lock()
+	if e.closed {
+		e.stateMu.Unlock()
+		return nil, nil, fmt.Errorf("credentials provider is closed")
+	}
 	e.rwLock.Lock()
 	registration := e.registrations[listener]
 	if registration == nil {

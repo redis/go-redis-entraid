@@ -88,6 +88,36 @@ func main() {
 }
 ```
 
+### Provider ownership and shutdown
+
+A credentials provider starts its token manager before a Redis connection is
+established. The application owns that provider, which may be shared by several
+Redis clients. Closing one client must not close the shared provider.
+
+The value returned by the provider constructors implements the optional
+`entraid.CredentialsProviderCloser` interface. After the application has stopped
+using the provider and its clients, call
+`provider.(entraid.CredentialsProviderCloser).Close()` explicitly. This also
+cleans up a provider when Redis dialing failed before any subscription existed.
+The constructor return types and eager token-initialization behavior are unchanged.
+
+`Close` permanently rejects new subscriptions and releases listener references.
+Concurrent calls share an active cleanup attempt. If stopping the manager fails,
+check the returned error and call `Close` again to retry cleanup; after successful
+cleanup, repeated calls are harmless. Already-snapshotted callbacks may finish,
+and `Close` does not forcibly interrupt arbitrary custom manager callbacks.
+A subscription already acquiring credentials when shutdown begins finishes its
+manager call but cannot register afterward. In particular, `Close` may wait for
+legacy manager methods that do not support cancellation.
+
+The built-in manager retains owner cleanup for acquisition abandoned by a canceled
+startup. Custom context-aware managers that may leave such work running must
+implement the optional `manager.TokenManagerStopper` capability so owner shutdown
+can also reach work for which `Start` returned no stopper. A custom manager method
+must not synchronously call `Close` on its own provider; it would wait for itself.
+Callbacks may unsubscribe. A panic from a custom stopper is returned as a cleanup
+error, releases concurrent close callers, and permits a later cleanup retry.
+
 ### Environment Setup
 ```bash
 # Required environment variables
