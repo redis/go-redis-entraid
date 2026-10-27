@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -388,11 +389,8 @@ func TestTokenManager_Start(t *testing.T) {
 						l.On("OnNext", testTokenValid).Return()
 						_, err = tokenManager.Start(l)
 					}
-					if err != nil {
-						if err != ErrTokenManagerAlreadyStopped && err != ErrTokenManagerAlreadyStarted {
-							// this is un unexpected error, fail the test
-							assert.Error(t, err)
-						}
+					if err != nil && !errors.Is(err, ErrTokenManagerAlreadyStopped) && !errors.Is(err, ErrTokenManagerAlreadyStarted) {
+						t.Errorf("unexpected error: %v", err)
 					}
 				}(i)
 			}
@@ -404,6 +402,14 @@ func TestTokenManager_Start(t *testing.T) {
 				assert.Nil(t, stopper)
 				assert.ErrorIs(t, err, ErrTokenManagerAlreadyStarted)
 				assert.NoError(t, tm.stop())
+			}
+			assert.Nil(t, tm.listener)
+			// A stopped manager must start again.
+			stopper, err := tokenManager.Start(listener)
+			assert.NoError(t, err)
+			assert.NotNil(t, tm.listener)
+			if stopper != nil {
+				assert.NoError(t, stopper())
 			}
 			assert.Nil(t, tm.listener)
 		})
