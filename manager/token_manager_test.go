@@ -2,8 +2,8 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"reflect"
@@ -370,7 +370,6 @@ func TestTokenManager_Start(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.NotPanics(t, func() {
-			last := &atomic.Int32{}
 			wg := &sync.WaitGroup{}
 
 			idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
@@ -383,7 +382,6 @@ func TestTokenManager_Start(t *testing.T) {
 					defer wg.Done()
 					var err error
 					time.Sleep(time.Duration(int64(rand.Intn(1000)+(300-int(num)/2)) * int64(time.Millisecond)))
-					last.Store(num)
 					if num%2 == 0 {
 						err = tm.stop()
 					} else {
@@ -391,33 +389,27 @@ func TestTokenManager_Start(t *testing.T) {
 						l.On("OnNext", testTokenValid).Return()
 						_, err = tokenManager.Start(l)
 					}
-					if err != nil {
-						if err != ErrTokenManagerAlreadyStopped && err != ErrTokenManagerAlreadyStarted {
-							// this is un unexpected error, fail the test
-							assert.Error(t, err)
-						}
+					if err != nil && !errors.Is(err, ErrTokenManagerAlreadyStopped) && !errors.Is(err, ErrTokenManagerAlreadyStarted) {
+						t.Errorf("unexpected error: %v", err)
 					}
 				}(i)
 			}
 			wg.Wait()
-			lastExecution := last.Load()
-			if lastExecution%2 == 0 {
-				if tm.listener != nil {
-					l := tm.listener.(*mockTokenListener)
-					log.Printf("FAILING WITH lastExecution [STARTED]:[LISTENER:%d]: %d", l.Id, lastExecution)
-				}
-				assert.Nil(t, tm.listener)
-			} else {
-				if tm.listener == nil {
-					log.Printf("FAILING WITH lastExecution[STOPPED]: %d", lastExecution)
-				}
-				assert.NotNil(t, tm.listener)
+			// The goroutines race, so the final state can be either started or
+			// stopped. Check that it is consistent and can be cleaned up.
+			if tm.listener != nil {
 				stopper, err := tokenManager.Start(listener)
 				assert.Nil(t, stopper)
-				assert.Error(t, err)
-				// Stop the token manager with internal stop, since stopper should be nil
-				err = tm.stop()
-				assert.Nil(t, err)
+				assert.ErrorIs(t, err, ErrTokenManagerAlreadyStarted)
+				assert.NoError(t, tm.stop())
+			}
+			assert.Nil(t, tm.listener)
+			// A stopped manager must start again.
+			stopper, err := tokenManager.Start(listener)
+			assert.NoError(t, err)
+			assert.NotNil(t, tm.listener)
+			if stopper != nil {
+				assert.NoError(t, stopper())
 			}
 			assert.Nil(t, tm.listener)
 		})
@@ -1539,67 +1531,6 @@ func BenchmarkTokenManager_GetToken(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = tokenManager.GetToken(false)
-	}
-}
-
-func BenchmarkTokenManager_Start(b *testing.B) {
-	idp := &mockIdentityProvider{}
-	listener := &mockTokenListener{}
-	mParser := &mockIdentityProviderResponseParser{}
-	tokenManager, err := NewTokenManager(idp,
-		TokenManagerOptions{
-			IdentityProviderResponseParser: mParser,
-		},
-	)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	rawResponse, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, "test")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
-	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
-	listener.On("OnNext", testTokenValid).Return()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = tokenManager.Start(listener)
-	}
-}
-
-func BenchmarkTokenManager_Close(b *testing.B) {
-	idp := &mockIdentityProvider{}
-	listener := &mockTokenListener{}
-	mParser := &mockIdentityProviderResponseParser{}
-	tokenManager, err := NewTokenManager(idp,
-		TokenManagerOptions{
-			IdentityProviderResponseParser: mParser,
-		},
-	)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	rawResponse, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, "test")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
-	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
-	listener.On("OnNext", testTokenValid).Return()
-
-	stopper, err := tokenManager.Start(listener)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = stopper()
 	}
 }
 
