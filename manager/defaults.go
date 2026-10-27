@@ -1,11 +1,16 @@
 package manager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"regexp"
+	"strings"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis-entraid/shared"
@@ -21,6 +26,8 @@ const (
 	DefaultRetryOptionsMaxDelay          = 10000 * time.Millisecond
 )
 
+var azureDNSLookupTimeout = regexp.MustCompile(`^(?:[a-z]+ "[^"]+": )?(?:dial tcp: )?lookup [^:\s]*(?: on \S+)?: timeout$`)
+
 // defaultIsRetryable is a function that checks if the error is retriable.
 // It takes an error as an argument and returns a boolean value.
 // The function checks if the error is a net.Error and if it is a timeout or temporary error.
@@ -28,6 +35,9 @@ const (
 var defaultIsRetryable = func(err error) bool {
 	if err == nil {
 		return true
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
 	}
 
 	var netErr net.Error
@@ -43,7 +53,38 @@ var defaultIsRetryable = func(err error) bool {
 		}
 	}
 
-	return errors.Is(err, os.ErrDeadlineExceeded)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+
+	// Azure Identity v1.10.0's ChainedTokenCredential converts source errors
+	// to AuthenticationFailedError without preserving them in Unwrap(). Only
+	// recognize explicit timeout/deadline diagnostics; other authentication
+	// failures (including permission and configuration errors) stay terminal.
+	var authErr *azidentity.AuthenticationFailedError
+	if errors.As(err, &authErr) {
+		message := strings.ToLower(authErr.Error())
+		if strings.Contains(message, "context canceled") || strings.Contains(message, "context cancelled") {
+			return false
+		}
+		if strings.Contains(message, "i/o timeout") ||
+			strings.Contains(message, "timed out") ||
+			strings.Contains(message, "deadline exceeded") {
+			return true
+		}
+		// net.DNSError with Err == "timeout" loses its Timeout method when
+		// Azure Identity formats the chained credential error. Match only the
+		// exact DNS diagnostic, optionally wrapped by the standard net.OpError
+		// and url.Error formatting.
+		for _, line := range strings.Split(message, "\n") {
+			if azureDNSLookupTimeout.MatchString(strings.TrimSpace(line)) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return false
 }
 
 // defaultRetryOptionsOr returns the default retry options if the provided options are not set.
