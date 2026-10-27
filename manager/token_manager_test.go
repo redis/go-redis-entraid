@@ -1528,67 +1528,6 @@ func BenchmarkTokenManager_GetToken(b *testing.B) {
 	}
 }
 
-func BenchmarkTokenManager_Start(b *testing.B) {
-	idp := &mockIdentityProvider{}
-	listener := &mockTokenListener{}
-	mParser := &mockIdentityProviderResponseParser{}
-	tokenManager, err := NewTokenManager(idp,
-		TokenManagerOptions{
-			IdentityProviderResponseParser: mParser,
-		},
-	)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	rawResponse, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, "test")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
-	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
-	listener.On("OnNext", testTokenValid).Return()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = tokenManager.Start(listener)
-	}
-}
-
-func BenchmarkTokenManager_Close(b *testing.B) {
-	idp := &mockIdentityProvider{}
-	listener := &mockTokenListener{}
-	mParser := &mockIdentityProviderResponseParser{}
-	tokenManager, err := NewTokenManager(idp,
-		TokenManagerOptions{
-			IdentityProviderResponseParser: mParser,
-		},
-	)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	rawResponse, err := shared.NewIDPResponse(shared.ResponseTypeRawToken, "test")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	idp.On("RequestToken", mock.Anything).Return(rawResponse, nil)
-	mParser.On("ParseResponse", rawResponse).Return(testTokenValid, nil)
-	listener.On("OnNext", testTokenValid).Return()
-
-	stopper, err := tokenManager.Start(listener)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = stopper()
-	}
-}
-
 func BenchmarkTokenManager_durationToRenewal(b *testing.B) {
 	idp := &mockIdentityProvider{}
 	tokenManager, err := NewTokenManager(idp, TokenManagerOptions{
