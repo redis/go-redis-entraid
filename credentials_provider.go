@@ -4,6 +4,8 @@
 package entraid
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -16,6 +18,10 @@ import (
 var _ auth.StreamingCredentialsProvider = (*entraidCredentialsProvider)(nil)
 
 // entraidCredentialsProvider is a struct that implements the StreamingCredentialsProvider interface.
+type listenerRegistration struct {
+	active bool
+}
+
 type entraidCredentialsProvider struct {
 	options CredentialsProviderOptions // Configuration options for the provider.
 
@@ -23,15 +29,32 @@ type entraidCredentialsProvider struct {
 	stopTokenManager manager.StopFunc     // Function to stop the token manager.
 
 	// listeners is a slice of listeners that are notified when the token manager receives a new token.
-	listeners []auth.CredentialsListener // Slice of listeners notified on token updates.
+	listeners     []auth.CredentialsListener // Slice of listeners notified on token updates.
+	registrations map[auth.CredentialsListener]*listenerRegistration
 
 	// rwLock is a mutex that is used to synchronize access to the listeners slice.
 	rwLock sync.RWMutex // Mutex for synchronizing access to the listeners slice.
 
-	tmLock sync.Mutex
+	// stateMu protects lifecycle bookkeeping only. Manager methods and listener
+	// callbacks must run outside it; pending reservations prevent last-unsubscribe
+	// shutdown from racing a subscription that has not registered yet.
+	// A failed stop is uncertain state: retry it before starting a new subscription.
+	stateMu       sync.Mutex
+	pending       int
+	pendingDone   chan struct{}
+	operation     *managerOperation
+	stopFailed    bool
+	stopRequested bool
+}
+
+type managerOperation struct {
+	done chan struct{}
+	err  error
 }
 
 // onTokenNext is a method that is called when the token manager receives a new token.
+// onTokenNext snapshots the listeners under the lock and invokes callbacks
+// after releasing it. An already-snapshotted callback may finish after unsubscribe returns.
 // It notifies all registered listeners with the new token.
 func (e *entraidCredentialsProvider) onTokenNext(t *token.Token) {
 	e.rwLock.RLock()
@@ -73,70 +96,232 @@ func (e *entraidCredentialsProvider) onTokenError(err error) {
 //
 // Note: If the listener is already subscribed, it will not receive duplicate notifications.
 func (e *entraidCredentialsProvider) Subscribe(listener auth.CredentialsListener) (auth.Credentials, auth.UnsubscribeFunc, error) {
-	// check if the manager is working
-	// If the stopTokenManager is nil, the token manager is not started.
-	e.tmLock.Lock()
-	if e.stopTokenManager == nil {
-		stopTM, err := e.tokenManager.Start(tokenListenerFromCP(e))
-		if err != nil {
-			return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
-		}
-		e.stopTokenManager = stopTM
-	}
-	e.tmLock.Unlock()
+	return e.subscribeContext(context.Background(), listener)
+}
 
-	token, err := e.tokenManager.GetToken(false)
+// SubscribeWithContext bounds this caller's wait for subscription setup.
+// The built-in token manager keeps shared acquisition independent of caller
+// cancellation, including after a successful manager start. A canceled setup
+// does not retire provider-owned work. Custom managers can provide StartWithContext and
+// GetTokenWithContext to support the same context-aware waits; managers with
+// only the legacy methods remain synchronous inside those calls.
+func (e *entraidCredentialsProvider) SubscribeWithContext(ctx context.Context, listener auth.CredentialsListener) (auth.Credentials, auth.UnsubscribeFunc, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	return e.subscribeContext(ctx, listener)
+}
+
+type contextTokenManager interface {
+	StartWithContext(context.Context, manager.TokenListener) (manager.StopFunc, error)
+	GetTokenWithContext(context.Context, bool) (*token.Token, error)
+}
+
+// reserveSubscription protects an in-progress registration, not execution of
+// arbitrary manager code. Its completion channel also lets owner shutdown wait
+// for already-reserved subscribers without holding stateMu.
+func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) error {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e.pending == 0 {
+		e.pendingDone = make(chan struct{})
+	}
+	e.pending++
+	return nil
+}
+
+// finishSubscription completes deferred last-listener cleanup after an actual
+// setup failure. Caller cancellation is different: its shared work remains owned
+// by the provider for adoption or explicit owner shutdown.
+func (e *entraidCredentialsProvider) finishSubscription(failed bool) error {
+	e.stateMu.Lock()
+	e.pending--
+	if e.pending == 0 {
+		close(e.pendingDone)
+	}
+	e.rwLock.RLock()
+	unused := len(e.listeners) == 0
+	e.rwLock.RUnlock()
+	if !failed || !e.stopRequested || e.pending != 0 || !unused || e.operation != nil || e.stopTokenManager == nil || e.stopFailed {
+		e.stateMu.Unlock()
+		return nil
+	}
+	stop := e.stopTokenManager
+	op := &managerOperation{done: make(chan struct{}), err: fmt.Errorf("token manager stop did not complete")}
+	e.operation = op
+	e.stateMu.Unlock()
+	if err := e.completeStop(op, stop); err != nil {
+		return fmt.Errorf("couldn't cancel token manager: %w", err)
+	}
+	return nil
+}
+
+// ensureStarted shares lifecycle transitions, but never calls a custom manager
+// with provider locks held. A canceled startup waiter does not poison peers.
+func (e *entraidCredentialsProvider) ensureStarted(ctx context.Context) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		e.stateMu.Lock()
+		if op := e.operation; op != nil {
+			e.stateMu.Unlock()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-op.done:
+				if op.err != nil && !errors.Is(op.err, context.Canceled) && !errors.Is(op.err, context.DeadlineExceeded) {
+					return op.err
+				}
+				continue
+			}
+		}
+		if e.stopFailed {
+			stop := e.stopTokenManager
+			op := &managerOperation{done: make(chan struct{}), err: fmt.Errorf("token manager stop did not complete")}
+			e.operation = op
+			e.stateMu.Unlock()
+			if err := e.completeStop(op, stop); err != nil {
+				return err
+			}
+			continue
+		}
+		if e.stopTokenManager != nil {
+			e.stateMu.Unlock()
+			return nil
+		}
+		op := &managerOperation{done: make(chan struct{}), err: fmt.Errorf("token manager start did not complete")}
+		e.operation = op
+		e.stateMu.Unlock()
+		return e.completeStart(ctx, op)
+	}
+}
+
+func (e *entraidCredentialsProvider) completeStart(ctx context.Context, op *managerOperation) (err error) {
+	defer func() {
+		e.stateMu.Lock()
+		e.operation = nil
+		close(op.done)
+		e.stateMu.Unlock()
+	}()
+	var stop manager.StopFunc
+	if cm, ok := e.tokenManager.(contextTokenManager); ok {
+		stop, err = cm.StartWithContext(ctx, tokenListenerFromCP(e))
+	} else {
+		stop, err = e.tokenManager.Start(tokenListenerFromCP(e))
+	}
+	e.stateMu.Lock()
+	if err == nil {
+		e.stopTokenManager = stop
+		e.stopRequested = false
+	}
+	op.err = err
+	e.stateMu.Unlock()
+	return err
+}
+
+func (e *entraidCredentialsProvider) completeStop(op *managerOperation, stop manager.StopFunc) (err error) {
+	defer func() {
+		e.stateMu.Lock()
+		if op.err == nil {
+			e.stopTokenManager = nil
+			e.stopRequested = false
+		}
+		e.stopFailed = op.err != nil
+		e.operation = nil
+		close(op.done)
+		e.stateMu.Unlock()
+	}()
+	err = stop()
+	op.err = err
+	return err
+}
+
+func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, listener auth.CredentialsListener) (credentials auth.Credentials, unsubscribe auth.UnsubscribeFunc, err error) {
+	if err := e.reserveSubscription(ctx); err != nil {
+		return nil, nil, err
+	}
+	defer func() {
+		if cleanupErr := e.finishSubscription(err != nil && ctx.Err() == nil); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
+	err = e.ensureStarted(ctx)
 	if err != nil {
+		return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
+	}
+	var tk *token.Token
+	if cm, ok := e.tokenManager.(contextTokenManager); ok {
+		tk, err = cm.GetTokenWithContext(ctx, false)
+	} else {
+		tk, err = e.tokenManager.GetToken(false)
+	}
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		// The manager belongs to the provider, not this setup attempt. Keep
+		// shared work available to later subscribers when this waiter leaves.
 		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
 	}
-
+	e.stateMu.Lock()
 	e.rwLock.Lock()
-	// Check if the listener is already in the list of listeners.
-	alreadySubscribed := false
-	for _, l := range e.listeners {
-		if l == listener {
-			alreadySubscribed = true
-			break
+	registration := e.registrations[listener]
+	if registration == nil {
+		registration = &listenerRegistration{active: true}
+		if e.registrations == nil {
+			e.registrations = make(map[auth.CredentialsListener]*listenerRegistration)
 		}
-	}
-
-	if !alreadySubscribed {
-		// add new listener
+		e.registrations[listener] = registration
 		e.listeners = append(e.listeners, listener)
 	}
 	e.rwLock.Unlock()
+	e.stopRequested = false
+	e.stateMu.Unlock()
+	var once sync.Once
+	var unsubscribeErr error
+	return tk, func() error {
+		once.Do(func() { unsubscribeErr = e.unsubscribe(listener, registration) })
+		return unsubscribeErr
+	}, nil
+}
 
-	unsub := func() error {
-		// Remove the listener from the list of listeners.
-		e.rwLock.Lock()
-		defer e.rwLock.Unlock()
-
-		for i, l := range e.listeners {
-			if l == listener {
-				e.listeners = append(e.listeners[:i], e.listeners[i+1:]...)
-				break
-			}
-		}
-
-		// Clear the listeners slice if it's empty
-		if len(e.listeners) == 0 {
-			e.listeners = make([]auth.CredentialsListener, 0)
-			e.tmLock.Lock()
-			if e.stopTokenManager != nil {
-				err := e.stopTokenManager()
-				if err != nil {
-					return fmt.Errorf("couldn't cancel token manager: %w", err)
-				}
-				// Set the stopTokenManager to nil to indicate that it has been stopped.
-				// This prevents multiple calls to stopTokenManager.
-				e.stopTokenManager = nil
-			}
-			e.tmLock.Unlock()
-		}
+func (e *entraidCredentialsProvider) unsubscribe(listener auth.CredentialsListener, registration *listenerRegistration) error {
+	e.stateMu.Lock()
+	e.rwLock.Lock()
+	if e.registrations[listener] != registration || !registration.active {
+		e.rwLock.Unlock()
+		e.stateMu.Unlock()
 		return nil
 	}
-
-	return token, unsub, nil
+	registration.active = false
+	delete(e.registrations, listener)
+	for i, l := range e.listeners {
+		if l == listener {
+			e.listeners = append(e.listeners[:i], e.listeners[i+1:]...)
+			break
+		}
+	}
+	last := len(e.listeners) == 0
+	e.rwLock.Unlock()
+	if last {
+		e.stopRequested = true
+	}
+	if !last || e.pending != 0 || e.operation != nil || e.stopTokenManager == nil {
+		e.stateMu.Unlock()
+		return nil
+	}
+	stop := e.stopTokenManager
+	op := &managerOperation{done: make(chan struct{}), err: fmt.Errorf("token manager stop did not complete")}
+	e.operation = op
+	e.stateMu.Unlock()
+	if err := e.completeStop(op, stop); err != nil {
+		return fmt.Errorf("couldn't cancel token manager: %w", err)
+	}
+	return nil
 }
 
 // NewCredentialsProvider creates a new credentials provider with the specified token manager and options.

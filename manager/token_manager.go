@@ -130,6 +130,6 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
 		tokenRWLock:                    &sync.RWMutex{},
-		lock:                           &sync.Mutex{},
+		startGate:                      make(chan struct{}, 1),
 	}, nil
 }
