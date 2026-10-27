@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793052519174,
+  "lastUpdate": 1793116279879,
   "repoUrl": "https://github.com/redis/go-redis-entraid",
   "entries": {
     "Go Benchmark": [
@@ -84196,6 +84196,846 @@ window.BENCHMARK_DATA = {
             "value": 1,
             "unit": "allocs/op",
             "extra": "24567693 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sapkotapragalva@gmail.com",
+            "name": "Pragalva",
+            "username": "PragalvaXFREZ"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "eedea857f35763227b35826e5cfd3a96c6d59516",
+          "message": "fix(manager): retry transient Azure credential timeouts (#23)\n\n* fix(manager): retry transient Azure credential timeouts\n\nSigned-off-by: Pragalva Sapkota <sapkotapragalva@gmail.com>\n\n* fix(manager): match wrapped Azure DNS timeouts\n\nSigned-off-by: Pragalva Sapkota <sapkotapragalva@gmail.com>\n\n* fix(manager): recognize DNS resolver timeout diagnostics\n\nSigned-off-by: Pragalva Sapkota <sapkotapragalva@gmail.com>\n\n---------\n\nSigned-off-by: Pragalva Sapkota <sapkotapragalva@gmail.com>\nCo-authored-by: Nedyalko Dyakov <1547186+ndyakov@users.noreply.github.com>",
+          "timestamp": "2026-10-27T17:49:54+02:00",
+          "tree_id": "f4c898f7faa757aec9c2062bbb397dcf0891ef02",
+          "url": "https://github.com/redis/go-redis-entraid/commit/eedea857f35763227b35826e5cfd3a96c6d59516"
+        },
+        "date": 1793116279098,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3382,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3382,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3127,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3127,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_Type (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3119,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3119,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3123,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3123,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AuthResult (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3137,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3137,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.317,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.317,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_AccessToken (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3127,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3127,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal)",
+            "value": 0.3122,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 0.3122,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIDPResp_RawToken (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal)",
+            "value": 24.35,
+            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
+            "extra": "45405189 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 24.35,
+            "unit": "ns/op",
+            "extra": "45405189 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "45405189 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "45405189 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal)",
+            "value": 24.71,
+            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
+            "extra": "45557029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 24.71,
+            "unit": "ns/op",
+            "extra": "45557029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "45557029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNewIDPResp (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "45557029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 3.781,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "320711995 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 3.781,
+            "unit": "ns/op",
+            "extra": "320711995 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "320711995 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "320711995 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 3.811,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "320740596 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 3.811,
+            "unit": "ns/op",
+            "extra": "320740596 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "320740596 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithNilChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "320740596 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 6.235,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "190115725 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 6.235,
+            "unit": "ns/op",
+            "extra": "190115725 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "190115725 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "190115725 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 6.238,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "191435624 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 6.238,
+            "unit": "ns/op",
+            "extra": "191435624 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "191435624 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithEmptyChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "191435624 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 11.62,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 11.62,
+            "unit": "ns/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal)",
+            "value": 11.22,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - ns/op",
+            "value": 11.22,
+            "unit": "ns/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkIsClosedWithClosedChannel (github.com/redis/go-redis-entraid/internal) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "100000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager)",
+            "value": 65.01,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "18468182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 65.01,
+            "unit": "ns/op",
+            "extra": "18468182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "18468182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "18468182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager)",
+            "value": 68.79,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "18556767 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 68.79,
+            "unit": "ns/op",
+            "extra": "18556767 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "18556767 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_GetToken (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "18556767 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager)",
+            "value": 6.741,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "180710731 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 6.741,
+            "unit": "ns/op",
+            "extra": "180710731 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "180710731 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "180710731 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager)",
+            "value": 6.639,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "180381820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 6.639,
+            "unit": "ns/op",
+            "extra": "180381820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "180381820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Start (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "180381820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager)",
+            "value": 16.73,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "71750766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 16.73,
+            "unit": "ns/op",
+            "extra": "71750766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "71750766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "71750766 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager)",
+            "value": 16.72,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "71734869 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 16.72,
+            "unit": "ns/op",
+            "extra": "71734869 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "71734869 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_Close (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "71734869 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager)",
+            "value": 61.02,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "19651844 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 61.02,
+            "unit": "ns/op",
+            "extra": "19651844 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "19651844 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "19651844 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager)",
+            "value": 61.16,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "19596512 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - ns/op",
+            "value": 61.16,
+            "unit": "ns/op",
+            "extra": "19596512 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "19596512 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkTokenManager_durationToRenewal (github.com/redis/go-redis-entraid/manager) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "19596512 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token)",
+            "value": 45.71,
+            "unit": "ns/op\t     112 B/op\t       1 allocs/op",
+            "extra": "25540351 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 45.71,
+            "unit": "ns/op",
+            "extra": "25540351 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "25540351 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "25540351 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token)",
+            "value": 47.98,
+            "unit": "ns/op\t     112 B/op\t       1 allocs/op",
+            "extra": "25082736 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 47.98,
+            "unit": "ns/op",
+            "extra": "25082736 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "25082736 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkNew (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "25082736 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3138,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3138,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3136,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3136,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkBasicAuth (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3146,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3146,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3143,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3143,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkRawCredentials (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3174,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3174,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token)",
+            "value": 0.3202,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 0.3202,
+            "unit": "ns/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkExpirationOn (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "1000000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token)",
+            "value": 47.02,
+            "unit": "ns/op\t     112 B/op\t       1 allocs/op",
+            "extra": "24593379 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 47.02,
+            "unit": "ns/op",
+            "extra": "24593379 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "24593379 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "24593379 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token)",
+            "value": 46.9,
+            "unit": "ns/op\t     112 B/op\t       1 allocs/op",
+            "extra": "24567889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - ns/op",
+            "value": 46.9,
+            "unit": "ns/op",
+            "extra": "24567889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "24567889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCopyToken (github.com/redis/go-redis-entraid/token) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "24567889 times\n4 procs"
           }
         ]
       }
