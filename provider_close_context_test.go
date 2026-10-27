@@ -60,7 +60,7 @@ func TestProviderContextSubscribeRejectedWhileOwnerStopRuns(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	_, unsubscribe, err := p.SubscribeWithContext(ctx, &distinctSilentListener{})
-	require.ErrorContains(t, err, "closed")
+	require.ErrorIs(t, err, ErrCredentialsProviderClosed)
 	require.Nil(t, unsubscribe)
 	require.NoError(t, ctx.Err(), "subscription rejection must not wait for external StopFunc")
 	once.Do(func() { close(release) })

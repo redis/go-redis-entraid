@@ -95,11 +95,19 @@ established. The application owns that provider, which may be shared by several
 Redis clients. Closing one client must not close the shared provider.
 
 The value returned by the provider constructors implements the optional
-`entraid.CredentialsProviderCloser` interface. After the application has stopped
-using the provider and its clients, call
-`provider.(entraid.CredentialsProviderCloser).Close()` explicitly. This also
-cleans up a provider when Redis dialing failed before any subscription existed.
-The constructor return types and eager token-initialization behavior are unchanged.
+`entraid.CredentialsProviderCloser` interface. Check for that interface before
+registering cleanup, so wrapped providers that do not expose it are also safe:
+
+```go
+if c, ok := provider.(entraid.CredentialsProviderCloser); ok {
+    defer c.Close()
+}
+```
+
+Register this before deferring client cleanup so the clients close first.
+Explicit provider cleanup also handles Redis dialing failures before any
+subscription existed. The constructor return types and eager token-initialization
+behavior are unchanged.
 
 `Close` permanently rejects new subscriptions and releases listener references.
 Concurrent calls share an active cleanup attempt. If stopping the manager fails,

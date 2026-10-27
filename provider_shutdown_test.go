@@ -244,7 +244,7 @@ func TestProviderCloseWaitsForInFlightSubscribe(t *testing.T) {
 	once.Do(func() { close(release) })
 	select {
 	case r := <-subscribeDone:
-		require.ErrorContains(t, r.err, "closed")
+		require.ErrorIs(t, r.err, ErrCredentialsProviderClosed)
 		require.Nil(t, r.unsubscribe)
 	case <-time.After(time.Second):
 		t.Fatal("Subscribe did not finish")

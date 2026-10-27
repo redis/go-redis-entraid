@@ -14,6 +14,10 @@ import (
 	"github.com/redis/go-redis/v9/auth"
 )
 
+// ErrCredentialsProviderClosed is returned when a subscription is attempted after
+// provider shutdown begins.
+var ErrCredentialsProviderClosed = errors.New("credentials provider is closed")
+
 // Ensure entraidCredentialsProvider implements the auth.StreamingCredentialsProvider interface.
 var _ auth.StreamingCredentialsProvider = (*entraidCredentialsProvider)(nil)
 
@@ -127,7 +131,7 @@ func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) er
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	if e.closed {
-		return fmt.Errorf("credentials provider is closed")
+		return ErrCredentialsProviderClosed
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -276,7 +280,7 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 	e.stateMu.Lock()
 	if e.closed {
 		e.stateMu.Unlock()
-		return nil, nil, fmt.Errorf("credentials provider is closed")
+		return nil, nil, ErrCredentialsProviderClosed
 	}
 	e.rwLock.Lock()
 	registration := e.registrations[listener]
