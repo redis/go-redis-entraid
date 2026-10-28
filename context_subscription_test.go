@@ -3,6 +3,9 @@ package entraid
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -320,6 +323,69 @@ type distinctSilentListener struct{}
 func (*distinctSilentListener) OnNext(auth.Credentials) {}
 func (*distinctSilentListener) OnError(error)           {}
 
+type sliceFieldListener struct{ values []int }
+
+func (sliceFieldListener) OnNext(auth.Credentials) {}
+func (sliceFieldListener) OnError(error)           {}
+
+type interfaceFieldListener struct{ value any }
+
+func (interfaceFieldListener) OnNext(auth.Credentials) {}
+func (interfaceFieldListener) OnError(error)           {}
+
+func TestUncomparableListenerIsRejectedWithoutPoisoningProvider(t *testing.T) {
+	if os.Getenv("ENTRAID_UNCOMPARABLE_LISTENER_CASE") != "" {
+		m := &regressionManager{token: regressionToken()}
+		p := &entraidCredentialsProvider{tokenManager: m}
+		var listener auth.CredentialsListener
+		switch os.Getenv("ENTRAID_UNCOMPARABLE_LISTENER_CASE") {
+		case "nil-subscribe", "nil-context":
+			listener = nil
+		case "slice-subscribe":
+			listener = sliceFieldListener{values: []int{1}}
+		case "interface-subscribe":
+			listener = interfaceFieldListener{value: []int{1}}
+		case "slice-context":
+			listener = sliceFieldListener{values: []int{1}}
+		case "interface-context":
+			listener = interfaceFieldListener{value: []int{1}}
+		}
+		var err error
+		if strings.HasSuffix(os.Getenv("ENTRAID_UNCOMPARABLE_LISTENER_CASE"), "context") {
+			_, _, err = p.SubscribeWithContext(context.Background(), listener)
+		} else {
+			_, _, err = p.Subscribe(listener)
+		}
+		if err == nil {
+			t.Fatal("expected uncomparable listener to be rejected")
+		}
+		_, unsubscribe, err := p.Subscribe(&distinctSilentListener{})
+		if err != nil {
+			t.Fatalf("provider unusable after rejecting listener: %v", err)
+		}
+		if err := unsubscribe(); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	for _, testCase := range []string{"nil-subscribe", "nil-context", "slice-subscribe", "interface-subscribe", "slice-context", "interface-context"} {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestUncomparableListenerIsRejectedWithoutPoisoningProvider$")
+			cmd.Env = append(os.Environ(), "ENTRAID_UNCOMPARABLE_LISTENER_CASE="+testCase)
+			output, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("uncomparable listener regression subprocess timed out (deadlock likely): %v\n%s", ctx.Err(), output)
+			}
+			if err != nil {
+				t.Fatalf("uncomparable listener regression subprocess failed: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
 func TestLastUnsubscribeCannotStopConcurrentNewSubscription(t *testing.T) {
 	m := &regressionManager{token: regressionToken()}
 	p := &entraidCredentialsProvider{tokenManager: m}
@@ -364,6 +430,42 @@ func TestLastUnsubscribeCannotStopConcurrentNewSubscription(t *testing.T) {
 	registered := len(p.listeners)
 	p.rwLock.RUnlock()
 	require.Equal(t, 1, registered)
+}
+
+func TestCanceledPendingSubscriptionCompletesDeferredLastUnsubscribe(t *testing.T) {
+	gate := make(chan struct{})
+	m := &regressionManager{token: regressionToken(), getEntered: make(chan struct{}, 1)}
+	p := &entraidCredentialsProvider{tokenManager: m}
+	_, unsubscribe, err := p.Subscribe(&distinctSilentListener{})
+	require.NoError(t, err)
+	<-m.getEntered // discard the initial subscriber's acquisition notification
+	m.getGate = gate
+
+	ctx, cancel := context.WithCancel(context.Background())
+	pending := make(chan error, 1)
+	go func() {
+		_, _, err := p.SubscribeWithContext(ctx, &sliceFieldListener{values: []int{2}})
+		pending <- err
+	}()
+	select {
+	case <-m.getEntered:
+	case <-time.After(time.Second):
+		t.Fatal("pending subscription did not reach token acquisition")
+	}
+	require.NoError(t, unsubscribe())
+	cancel()
+	select {
+	case err := <-pending:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("canceled pending subscription did not return")
+	}
+
+	m.mu.Lock()
+	stops := m.stops
+	m.mu.Unlock()
+	require.Equal(t, 1, stops, "last-unsubscribe stop request must be honored after pending caller cancels")
+	close(gate)
 }
 
 func TestUnsubscribeIsIdempotent(t *testing.T) {
