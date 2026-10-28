@@ -133,10 +133,10 @@ func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) er
 	return nil
 }
 
-// finishSubscription completes deferred last-listener cleanup after an actual
-// setup failure. Caller cancellation is different: its shared work remains owned
-// by the provider for adoption or explicit owner shutdown.
-func (e *entraidCredentialsProvider) finishSubscription(failed bool) error {
+// finishSubscription completes a deferred last-listener stop request once the
+// final pending setup exits. The stopRequested flag is set only by an actual
+// last unsubscribe, so caller cancellation alone does not stop shared work.
+func (e *entraidCredentialsProvider) finishSubscription() error {
 	e.stateMu.Lock()
 	e.pending--
 	if e.pending == 0 {
@@ -145,7 +145,7 @@ func (e *entraidCredentialsProvider) finishSubscription(failed bool) error {
 	e.rwLock.RLock()
 	unused := len(e.listeners) == 0
 	e.rwLock.RUnlock()
-	if !failed || !e.stopRequested || e.pending != 0 || !unused || e.operation != nil || e.stopTokenManager == nil || e.stopFailed {
+	if !e.stopRequested || e.pending != 0 || !unused || e.operation != nil || e.stopTokenManager == nil || e.stopFailed {
 		e.stateMu.Unlock()
 		return nil
 	}
@@ -240,12 +240,32 @@ func (e *entraidCredentialsProvider) completeStop(op *managerOperation, stop man
 	return err
 }
 
+// validateListener catches invalid interface values before they can be used as
+// keys in the registrations map. Comparing the interface to itself deliberately
+// lets Go detect dynamic uncomparability; the scoped recovery converts that
+// panic into a normal subscription error.
+func validateListener(listener auth.CredentialsListener) (err error) {
+	if listener == nil {
+		return errors.New("credentials listener must not be nil")
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("credentials listener must be comparable: %v", recovered)
+		}
+	}()
+	_ = listener == listener
+	return nil
+}
+
 func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, listener auth.CredentialsListener) (credentials auth.Credentials, unsubscribe auth.UnsubscribeFunc, err error) {
+	if err := validateListener(listener); err != nil {
+		return nil, nil, err
+	}
 	if err := e.reserveSubscription(ctx); err != nil {
 		return nil, nil, err
 	}
 	defer func() {
-		if cleanupErr := e.finishSubscription(err != nil && ctx.Err() == nil); cleanupErr != nil {
+		if cleanupErr := e.finishSubscription(); cleanupErr != nil {
 			err = errors.Join(err, cleanupErr)
 		}
 	}()
