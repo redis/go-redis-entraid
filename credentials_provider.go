@@ -14,6 +14,10 @@ import (
 	"github.com/redis/go-redis/v9/auth"
 )
 
+// ErrCredentialsProviderClosed is returned when a subscription is attempted after
+// provider shutdown begins.
+var ErrCredentialsProviderClosed = errors.New("credentials provider is closed")
+
 // Ensure entraidCredentialsProvider implements the auth.StreamingCredentialsProvider interface.
 var _ auth.StreamingCredentialsProvider = (*entraidCredentialsProvider)(nil)
 
@@ -45,6 +49,9 @@ type entraidCredentialsProvider struct {
 	operation     *managerOperation
 	stopFailed    bool
 	stopRequested bool
+	closed        bool
+	closeAttempt  *providerCloseAttempt
+	closeErr      error
 }
 
 type managerOperation struct {
@@ -123,6 +130,9 @@ type contextTokenManager interface {
 func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) error {
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
+	if e.closed {
+		return ErrCredentialsProviderClosed
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -288,6 +298,10 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
 	}
 	e.stateMu.Lock()
+	if e.closed {
+		e.stateMu.Unlock()
+		return nil, nil, ErrCredentialsProviderClosed
+	}
 	e.rwLock.Lock()
 	registration := e.registrations[listener]
 	if registration == nil {

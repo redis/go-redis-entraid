@@ -87,6 +87,11 @@ type TokenManager interface {
 	Start(listener TokenListener) (StopFunc, error)
 }
 
+// TokenManagerStopper is an optional owner cleanup capability. Stop must also
+// retire acquisition left behind by a canceled StartWithContext, even when no
+// successful Start returned a StopFunc. Repeated successful Stop calls are safe.
+type TokenManagerStopper interface{ Stop() error }
+
 // StopFunc is a function that stops the token manager.
 type StopFunc func() error
 

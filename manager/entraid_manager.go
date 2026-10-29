@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -242,10 +243,12 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		close(e.closedChan)
 	}
 
-	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	e.ctxMu.Lock()
-	e.ctx = lifecycleCtx
-	e.ctxCancel = lifecycleCancel
+	// A canceled Start leaves shared work owned by this lifecycle. Do not replace
+	// its cancel handle until Stop has retired it.
+	if e.ctx == nil || e.ctx.Err() != nil {
+		e.ctx, e.ctxCancel = context.WithCancel(context.Background())
+	}
 	e.ctxMu.Unlock()
 
 	// Make sure there is a token in memory before starting the loop. The
@@ -335,6 +338,16 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 	}(listener, e.closedChan)
 
 	return e.stop, nil
+}
+
+// Stop retires both active renewal and acquisition from an abandoned startup.
+// Unlike an individual Start stopper, owner cleanup is idempotent.
+func (e *entraidTokenManager) Stop() error {
+	err := e.stop()
+	if errors.Is(err, ErrTokenManagerAlreadyStopped) {
+		return nil
+	}
+	return err
 }
 
 // stop closes the token manager and releases any resources.
