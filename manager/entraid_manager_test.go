@@ -1,11 +1,17 @@
 package manager
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis-entraid/shared"
 	"github.com/redis/go-redis-entraid/token"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 const testDurationDelta = float64(10 * time.Millisecond)
@@ -458,5 +464,230 @@ func TestDurationToRenewalConcurrent(t *testing.T) {
 			// All results should be within 5ms of each other
 			assert.InDelta(t, firstResult.Milliseconds(), result.Milliseconds(), 5)
 		}
+	}
+}
+
+type flightWaitObservedContext struct {
+	context.Context
+	once    sync.Once
+	waiting chan struct{}
+}
+
+func (c *flightWaitObservedContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.waiting) })
+	return c.Context.Done()
+}
+
+func TestForcedCallerDoesNotJoinNonForcedCacheFlight(t *testing.T) {
+	idp := &mockIdentityProvider{}
+	parser := &mockIdentityProviderResponseParser{}
+	fresh := token.New("user", "pass", "fresh", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds())
+	idp.On("RequestToken", mock.Anything).Return(shared.IdentityProviderResponse(nil), nil).Once()
+	parser.On("ParseResponse", shared.IdentityProviderResponse(nil)).Return(fresh, nil).Once()
+	m := &entraidTokenManager{
+		idp: idp, identityProviderResponseParser: parser,
+		token:       token.New("user", "pass", "cached", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds()),
+		tokenRWLock: &sync.RWMutex{}, expirationRefreshRatio: 0.75,
+		lowerBoundDuration: time.Second, requestTimeout: time.Second, ctx: context.Background(),
+	}
+	m.tokenRWLock.Lock()
+	nonforced := make(chan error, 1)
+	go func() { _, err := m.GetTokenWithContext(context.Background(), false); nonforced <- err }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		m.acquireMu.Lock()
+		installed := m.acquire != nil
+		m.acquireMu.Unlock()
+		if installed {
+			break
+		}
+		if time.Now().After(deadline) {
+			m.tokenRWLock.Unlock()
+			t.Fatal("non-forced flight was not installed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	forced := make(chan *token.Token, 1)
+	forcedContext := &flightWaitObservedContext{Context: context.Background(), waiting: make(chan struct{})}
+	go func() { tk, _ := m.GetTokenWithContext(forcedContext, true); forced <- tk }()
+	select {
+	case <-forcedContext.waiting:
+	case <-time.After(time.Second):
+		m.tokenRWLock.Unlock()
+		t.Fatal("forced caller did not reach the active-flight wait")
+	}
+	m.tokenRWLock.Unlock()
+	if err := <-nonforced; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case tk := <-forced:
+		if tk == nil || tk.RawToken() != "fresh" {
+			t.Fatalf("forced caller got %v, want refreshed token", tk)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("forced acquisition did not finish")
+	}
+	idp.AssertExpectations(t)
+	parser.AssertExpectations(t)
+}
+
+type lifecycleTestListener struct{}
+
+func (lifecycleTestListener) OnNext(*token.Token) {}
+func (lifecycleTestListener) OnError(error)       {}
+
+func TestRestartRejectsResultFromRetiredAcquisition(t *testing.T) {
+	idp := &mockIdentityProvider{}
+	parser := &mockIdentityProviderResponseParser{}
+	entered, release := make(chan struct{}), make(chan struct{})
+	fresh := token.New("user", "pass", "stale-result", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds())
+	cached := token.New("user", "pass", "cached", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds())
+	idp.On("RequestToken", mock.Anything).Run(func(args mock.Arguments) { close(entered); <-release }).Return(shared.IdentityProviderResponse(nil), nil).Once()
+	parser.On("ParseResponse", shared.IdentityProviderResponse(nil)).Return(fresh, nil).Once()
+	m := &entraidTokenManager{
+		idp: idp, identityProviderResponseParser: parser, token: cached,
+		tokenRWLock: &sync.RWMutex{}, expirationRefreshRatio: 0.75,
+		lowerBoundDuration: time.Second, requestTimeout: time.Second,
+		startGate: make(chan struct{}, 1), ctx: context.Background(),
+	}
+	stop, err := m.Start(lifecycleTestListener{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	forced := make(chan error, 1)
+	go func() { _, err := m.GetTokenWithContext(context.Background(), true); forced <- err }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("old acquisition did not start")
+	}
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+	newStop := make(chan error, 1)
+	go func() {
+		stop, err := m.Start(lifecycleTestListener{})
+		if err == nil {
+			err = stop()
+		}
+		newStop <- err
+	}()
+	close(release)
+	if err := <-forced; err == nil {
+		t.Fatal("retired acquisition result should be rejected")
+	}
+	select {
+	case err := <-newStop:
+		if err != nil {
+			t.Fatalf("restart failed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("restart waited on retired flight indefinitely")
+	}
+	m.tokenRWLock.RLock()
+	got := m.token
+	m.tokenRWLock.RUnlock()
+	if got.RawToken() != "cached" {
+		t.Fatalf("stale lifecycle token was stored: %q", got.RawToken())
+	}
+	idp.AssertExpectations(t)
+	parser.AssertExpectations(t)
+}
+
+type panicOnceIDP struct {
+	entered chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (p *panicOnceIDP) RequestToken(context.Context) (shared.IdentityProviderResponse, error) {
+	p.calls++
+	if p.calls == 1 && p.entered != nil {
+		close(p.entered)
+		<-p.release
+		panic("identity provider panic")
+	}
+	return nil, nil
+}
+
+type panicOnceParser struct {
+	entered chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (p *panicOnceParser) ParseResponse(shared.IdentityProviderResponse) (*token.Token, error) {
+	p.calls++
+	if p.calls == 1 && p.entered != nil {
+		close(p.entered)
+		<-p.release
+		panic("response parser panic")
+	}
+	return token.New("user", "pass", "retried", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds()), nil
+}
+
+func TestAcquisitionWorkerContainsPanics(t *testing.T) {
+	if panicAt := os.Getenv("ENTRAID_PANIC_STAGE"); panicAt != "" {
+		testAcquisitionWorkerContainsPanic(t, panicAt)
+		return
+	}
+	for _, stage := range []string{"identity", "parser"} {
+		t.Run(stage, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestAcquisitionWorkerContainsPanics$")
+			cmd.Env = append(os.Environ(), "ENTRAID_PANIC_STAGE="+stage)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("panic acquisition subprocess failed: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+func testAcquisitionWorkerContainsPanic(t *testing.T, stage string) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	idp := &panicOnceIDP{}
+	parser := &panicOnceParser{}
+	if stage == "identity" {
+		idp.entered, idp.release = entered, release
+	} else {
+		parser.entered, parser.release = entered, release
+	}
+	m := &entraidTokenManager{
+		idp: idp, identityProviderResponseParser: parser,
+		tokenRWLock: &sync.RWMutex{}, expirationRefreshRatio: 0.75,
+		lowerBoundDuration: time.Second, requestTimeout: time.Second, ctx: context.Background(),
+	}
+	first := make(chan error, 1)
+	go func() { _, err := m.GetTokenWithContext(context.Background(), false); first <- err }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("acquisition did not reach panic point")
+	}
+	joinedContext := &flightWaitObservedContext{Context: context.Background(), waiting: make(chan struct{})}
+	joined := make(chan error, 1)
+	go func() { _, err := m.GetTokenWithContext(joinedContext, false); joined <- err }()
+	select {
+	case <-joinedContext.waiting:
+	case <-time.After(time.Second):
+		t.Fatal("second caller did not join acquisition")
+	}
+	close(release)
+	for name, result := range map[string]<-chan error{"first": first, "joined": joined} {
+		select {
+		case err := <-result:
+			if err == nil {
+				t.Errorf("%s caller got nil error after panic", name)
+			}
+		case <-time.After(time.Second):
+			t.Errorf("%s caller remained blocked after panic", name)
+		}
+	}
+	tk, err := m.GetTokenWithContext(context.Background(), false)
+	if err != nil {
+		t.Fatalf("acquisition did not retry after panic: %v", err)
+	}
+	if tk == nil || tk.RawToken() != "retried" {
+		t.Fatalf("retry returned token %v, want retried token", tk)
 	}
 }
