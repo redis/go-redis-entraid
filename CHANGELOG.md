@@ -5,6 +5,35 @@ All notable changes to go-redis-entraid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-29
+
+### Added
+- feat(provider): support context-aware credential subscriptions (`SubscribeWithContext`). Canceling the context ends only that caller's wait; a token request shared with other connections keeps running. @PragalvaXFREZ (#22)
+- feat(provider): add explicit owner-controlled shutdown. Providers implement `CredentialsProviderCloser`; `Close` stops the token manager, also when Redis dialing failed before any subscription. Adds `ErrCredentialsProviderClosed` and the optional `manager.TokenManagerStopper`. @PragalvaXFREZ (#24)
+
+### Fixed
+- fix(provider): a failed token manager restart no longer blocks later subscriptions (#18) @PragalvaXFREZ (#22)
+- fix(provider): a subscription racing the last unsubscribe no longer succeeds without token renewal (#21) @PragalvaXFREZ (#22)
+- fix(manager): retry transient Azure credential timeouts instead of stopping renewal (#19) @PragalvaXFREZ (#23)
+- fix(provider): credentials providers can be stopped after Redis dialing fails (#20) @PragalvaXFREZ (#24)
+
+### Changed
+- fix(ci): fix action version @ndyakov (#17)
+- fix(ci): bump golangci-lint, fix expired test JWT @ndyakov (#25)
+- test(manager): fix flaky start/stop test, drop lock-only benchmarks @ndyakov (#26)
+
+### Compatibility
+- Go: 1.23+
+- go-redis: v9.9.0+
+
+## [1.0.7] - 2026-01-14
+
+### Fixed
+- fix(tenant): fix swapped `AuthorityTypeDefault` and `AuthorityTypeMultiTenant` implementations @ndyakov (#16)
+
+### Changed
+- tests(integration): add example tests instead of applications @ndyakov (#14)
+
 ## [1.0.6] - 2025-09-12
 
 ### Changed
@@ -63,3 +92,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.4]: https://github.com/redis/go-redis-entraid/releases/tag/v1.0.4
 [1.0.5]: https://github.com/redis/go-redis-entraid/releases/tag/v1.0.5
 [1.0.6]: https://github.com/redis/go-redis-entraid/releases/tag/v1.0.6
+[1.0.7]: https://github.com/redis/go-redis-entraid/releases/tag/v1.0.7
+[1.1.0]: https://github.com/redis/go-redis-entraid/releases/tag/v1.1.0
