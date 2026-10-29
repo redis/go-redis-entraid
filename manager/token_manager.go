@@ -59,6 +59,8 @@ type RetryOptions struct {
 	// default: defaultRetryableFunc
 	IsRetryable func(err error) bool
 	// MaxAttempts is the maximum number of attempts to retry the token request.
+	// When all attempts fail, or the error is not retryable, the error is passed
+	// to the listener and a new round of attempts starts after MaxDelay.
 	//
 	// default: 3
 	MaxAttempts int
@@ -66,7 +68,8 @@ type RetryOptions struct {
 	//
 	// default: 1 second
 	InitialDelay time.Duration
-	// MaxDelay is the maximum delay between retry attempts.
+	// MaxDelay is the maximum delay between retry attempts, and the delay before
+	// a new round of attempts after a failed one.
 	//
 	// default: 10 seconds
 	MaxDelay time.Duration

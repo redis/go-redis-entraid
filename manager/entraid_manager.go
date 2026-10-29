@@ -75,6 +75,7 @@ type entraidTokenManager struct {
 type tokenAcquisition struct {
 	done       chan struct{}
 	token      *token.Token
+	current    *token.Token // valid cached token when the request failed
 	err        error
 	force      bool
 	generation uint64
@@ -109,7 +110,7 @@ func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefr
 					close(flight.done)
 					e.acquireMu.Unlock()
 				}()
-				flight.token, flight.err = e.getTokenForGeneration(flight.force, flight.generation)
+				flight.token, flight.current, flight.err = e.getTokenForGeneration(flight.force, flight.generation)
 			}()
 			e.acquireMu.Unlock()
 			select {
@@ -122,7 +123,7 @@ func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefr
 				if flight.generation != generation {
 					continue
 				}
-				return flight.token, flight.err
+				return tokenOrCurrent(forceRefresh, flight.token, flight.current, flight.err)
 			}
 		}
 		// A forced caller never joins non-forced work. A non-forced caller may
@@ -139,7 +140,7 @@ func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefr
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			return flight.token, flight.err
+			return tokenOrCurrent(forceRefresh, flight.token, flight.current, flight.err)
 		}
 	}
 }
@@ -148,17 +149,32 @@ func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) 
 	e.ctxMu.RLock()
 	generation := e.generation
 	e.ctxMu.RUnlock()
-	return e.getTokenForGeneration(forceRefresh, generation)
+	t, current, err := e.getTokenForGeneration(forceRefresh, generation)
+	return tokenOrCurrent(forceRefresh, t, current, err)
 }
 
-func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generation uint64) (*token.Token, error) {
+// tokenOrCurrent keeps a caller that did not force a refresh on the current
+// token when the identity provider request failed, so new connections can
+// authenticate while the identity provider is unavailable. Forced refreshes,
+// such as renewals, get the error.
+func tokenOrCurrent(forceRefresh bool, t, current *token.Token, err error) (*token.Token, error) {
+	if err != nil && !forceRefresh && current != nil {
+		return current, nil
+	}
+	return t, err
+}
+
+// getTokenForGeneration returns the cached token or requests a new one. When
+// the request fails while the cached token has not expired, it also returns
+// the cached token as current.
+func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generation uint64) (t, current *token.Token, err error) {
 	e.tokenRWLock.RLock()
 	// check if the token is nil and if it is not expired
-	t := e.token
+	t = e.token
 	duration := e.durationToRenewal(t)
 	if !forceRefresh && t != nil && duration > 0 {
 		e.tokenRWLock.RUnlock()
-		return t, nil
+		return t, nil, nil
 	}
 	e.tokenRWLock.RUnlock()
 
@@ -170,7 +186,7 @@ func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generatio
 	currentGeneration := e.generation
 	e.ctxMu.RUnlock()
 	if generation != currentGeneration {
-		return nil, fmt.Errorf("token acquisition lifecycle retired")
+		return nil, nil, fmt.Errorf("token acquisition lifecycle retired")
 	}
 	ctx, ctxCancel := context.WithTimeout(baseCtx, e.requestTimeout)
 	defer ctxCancel()
@@ -183,22 +199,23 @@ func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generatio
 	t = e.token
 	duration = e.durationToRenewal(t)
 	if !forceRefresh && t != nil && duration > 0 {
-		return t, nil
+		return t, nil, nil
 	}
 
+	cached := t
 	// Request a new token from the identity provider
 	idpResult, err := e.idp.RequestToken(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to request token from idp: %w", err)
+		return nil, validToken(cached), fmt.Errorf("failed to request token from idp: %w", err)
 	}
 
 	t, err = e.identityProviderResponseParser.ParseResponse(idpResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		return nil, validToken(cached), fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if t == nil {
-		return nil, fmt.Errorf("failed to get token: token is nil")
+		return nil, validToken(cached), fmt.Errorf("failed to get token: token is nil")
 	}
 
 	// Hold the lifecycle read lock through publication so Stop cannot retire
@@ -206,12 +223,20 @@ func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generatio
 	e.ctxMu.RLock()
 	defer e.ctxMu.RUnlock()
 	if generation != e.generation {
-		return nil, fmt.Errorf("token acquisition lifecycle retired")
+		return nil, nil, fmt.Errorf("token acquisition lifecycle retired")
 	}
 	// Store the token
 	e.token = t
 	// Return the token - no need to copy since it's immutable
-	return t, nil
+	return t, nil, nil
+}
+
+// validToken returns t if it has not expired, otherwise nil.
+func validToken(t *token.Token) *token.Token {
+	if t != nil && time.Now().Before(t.ExpirationOn()) {
+		return t
+	}
+	return nil
 }
 
 // Start starts the token manager and returns cancelFunc to stop the token manager.
@@ -308,9 +333,14 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 					// check if err is retriable
 					if e.retryOptions.IsRetryable(err) {
 						if i == e.retryOptions.MaxAttempts-1 {
-							// last attempt, call OnError
+							// last attempt, call OnError and start a new round after maxDelay
 							listener.OnError(fmt.Errorf("max attempts reached: %w", err))
-							return
+							select {
+							case <-closed:
+								return
+							case <-time.After(maxDelay):
+							}
+							break
 						}
 
 						// Exponential backoff
@@ -328,9 +358,15 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 							// continue to next attempt
 						}
 					} else {
-						// not retriable
+						// not retriable, but the identity provider may recover:
+						// call OnError and start a new round after maxDelay
 						listener.OnError(err)
-						return
+						select {
+						case <-closed:
+							return
+						case <-time.After(maxDelay):
+						}
+						break
 					}
 				}
 			}

@@ -1277,6 +1277,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		time.Sleep(toRenewal + 100*time.Millisecond)
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		mock.AssertExpectationsForObjects(t, idp, listener)
+		assert.NoError(t, cancel())
 	})
 
 	t.Run("Start and Listen with NOT retriable error", func(t *testing.T) {
@@ -1333,6 +1334,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		idp.AssertNumberOfCalls(t, "RequestToken", 2)
 		listener.AssertNumberOfCalls(t, "OnError", 1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
+		assert.NoError(t, cancel())
 	})
 
 	t.Run("Start and Listen with retriable error - max retries and max delay", func(t *testing.T) {
@@ -1424,6 +1426,8 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 
 		idp.AssertNumberOfCalls(t, "RequestToken", tm.retryOptions.MaxAttempts+1)
 		mock.AssertExpectationsForObjects(t, idp, listener)
+		// renewal continues after a failed round
+		assert.NoError(t, cancel())
 	})
 	t.Run("Start and Listen and close during retries", func(t *testing.T) {
 		t.Parallel()
