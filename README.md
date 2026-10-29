@@ -21,7 +21,7 @@ Entra ID extension for go-redis
 go-redis-entraid is a Go library that provides Entra ID (formerly Azure AD) authentication support for Redis Enterprise Cloud. It enables secure authentication using various Entra ID identity types and manages token lifecycle automatically.
 
 ### Version Compatibility
-- Go: 1.23+
+- Go: 1.23+ (CI runs the latest stable Go release)
 - go-redis: v9.9.0+
 
 ### Key Features
@@ -90,41 +90,52 @@ func main() {
 
 ### Provider ownership and shutdown
 
-A credentials provider starts its token manager before a Redis connection is
-established. The application owns that provider, which may be shared by several
-Redis clients. Closing one client must not close the shared provider.
+The application owns the credentials provider. One provider can be shared by
+several Redis clients, and closing a client does not close the provider. The
+token manager starts when the provider is created, so close the provider when
+you are done with it, also when Redis dialing failed.
 
-The value returned by the provider constructors implements the optional
-`entraid.CredentialsProviderCloser` interface. Check for that interface before
-registering cleanup, so wrapped providers that do not expose it are also safe:
+The providers returned by the constructors implement
+`entraid.CredentialsProviderCloser`. Register its cleanup before the clients'
+cleanup, so the clients close first (deferred calls run in reverse order):
 
 ```go
+provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
+    ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
+        ManagedIdentityType: identity.SystemAssignedIdentity,
+    },
+})
+if err != nil {
+    return err
+}
 if c, ok := provider.(entraid.CredentialsProviderCloser); ok {
     defer c.Close()
 }
+
+first := redis.NewClient(&redis.Options{Addr: addr, StreamingCredentialsProvider: provider})
+defer first.Close()
+second := redis.NewClient(&redis.Options{Addr: addr, StreamingCredentialsProvider: provider})
+defer second.Close()
 ```
 
-Register this before deferring client cleanup so the clients close first.
-Explicit provider cleanup also handles Redis dialing failures before any
-subscription existed. The constructor return types and eager token-initialization
-behavior are unchanged.
+After `Close`, new subscriptions fail with `entraid.ErrCredentialsProviderClosed`.
+Repeated `Close` calls are safe; if stopping the token manager fails, call
+`Close` again to retry. A full example is in
+[examples/entraid/provider_lifecycle](examples/entraid/provider_lifecycle).
 
-`Close` permanently rejects new subscriptions and releases listener references.
-Concurrent calls share an active cleanup attempt. If stopping the manager fails,
-check the returned error and call `Close` again to retry cleanup; after successful
-cleanup, repeated calls are harmless. Already-snapshotted callbacks may finish,
-and `Close` does not forcibly interrupt arbitrary custom manager callbacks.
-A subscription already acquiring credentials when shutdown begins finishes its
-manager call but cannot register afterward. In particular, `Close` may wait for
-legacy manager methods that do not support cancellation.
+### Context-aware subscriptions
 
-The built-in manager retains owner cleanup for acquisition abandoned by a canceled
-startup. Custom context-aware managers that may leave such work running must
-implement the optional `manager.TokenManagerStopper` capability so owner shutdown
-can also reach work for which `Start` returned no stopper. A custom manager method
-must not synchronously call `Close` on its own provider; it would wait for itself.
-Callbacks may unsubscribe. A panic from a custom stopper is returned as a cleanup
-error, releases concurrent close callers, and permits a later cleanup retry.
+The provider also implements
+`SubscribeWithContext(ctx, listener) (auth.Credentials, auth.UnsubscribeFunc, error)`.
+The context limits only that caller's wait for credentials; canceling it does not
+cancel a token request that other connections share. go-redis uses this method
+once it supports context-aware credentials providers; until then it calls
+`Subscribe`.
+
+Custom token managers can support the same waits by implementing
+`StartWithContext` and `GetTokenWithContext`, and can implement
+`manager.TokenManagerStopper` so that `Close` also stops work left by a canceled
+start.
 
 ### Environment Setup
 ```bash
@@ -521,6 +532,13 @@ provider, err := entraid.NewDefaultAzureCredentialsProvider(entraid.DefaultAzure
 })
 ```
 
+### Shared Provider and Shutdown
+
+Several clients share one provider, closing one client keeps the other working,
+and the provider is closed last. See
+[examples/entraid/provider_lifecycle](examples/entraid/provider_lifecycle) and
+[Provider ownership and shutdown](#provider-ownership-and-shutdown).
+
 ### Advanced Usage with Custom Identity Provider
 
 This example shows how to implement your own IdentityProvider while leveraging our TokenManager and StreamingCredentialsProvider. This is useful when you need to authenticate with a custom token source but want to benefit from our token management and streaming capabilities.
@@ -915,6 +933,9 @@ The library provides several error types that you can check against:
 ```go
 // Import the shared package to access error types
 import "github.com/redis/go-redis-entraid/shared"
+
+// Returned by Subscribe and SubscribeWithContext after the provider is closed:
+//   entraid.ErrCredentialsProviderClosed
 
 // Available error types:
 var (
