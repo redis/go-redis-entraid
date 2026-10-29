@@ -302,6 +302,9 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		}()
 		maxDelay := e.retryOptions.MaxDelay
 		initialDelay := e.retryOptions.InitialDelay
+		// renewalDelay is the wait before renewing a token that is already due:
+		// initialDelay, or maxDelay after a failed round
+		renewalDelay := initialDelay
 
 		for {
 			e.tokenRWLock.RLock()
@@ -316,10 +319,11 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 					select {
 					case <-closed:
 						return
-					case <-time.After(initialDelay):
+					case <-time.After(renewalDelay):
 						// continue to attempt
 					}
 				}
+				renewalDelay = initialDelay
 
 				// Token is about to expire, refresh it
 				delay := initialDelay
@@ -335,11 +339,7 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 						if i == e.retryOptions.MaxAttempts-1 {
 							// last attempt, call OnError and start a new round after maxDelay
 							listener.OnError(fmt.Errorf("max attempts reached: %w", err))
-							select {
-							case <-closed:
-								return
-							case <-time.After(maxDelay):
-							}
+							renewalDelay = maxDelay
 							break
 						}
 
@@ -361,11 +361,7 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 						// not retriable, but the identity provider may recover:
 						// call OnError and start a new round after maxDelay
 						listener.OnError(err)
-						select {
-						case <-closed:
-							return
-						case <-time.After(maxDelay):
-						}
+						renewalDelay = maxDelay
 						break
 					}
 				}

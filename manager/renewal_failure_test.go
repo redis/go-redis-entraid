@@ -79,6 +79,42 @@ func TestRenewalResumesAfterFailedRenewal(t *testing.T) {
 	}
 }
 
+type timedListener struct{ failures chan time.Time }
+
+func (l *timedListener) OnNext(*token.Token) {}
+
+func (l *timedListener) OnError(error) {
+	select {
+	case l.failures <- time.Now():
+	default:
+	}
+}
+
+func TestNewRoundStartsAfterMaxDelay(t *testing.T) {
+	idp := &failingIdentityProvider{fail: func(call int32) bool { return call > 1 }}
+	tm, err := NewTokenManager(idp, TokenManagerOptions{
+		LowerRefreshBound: time.Hour, // renew right away
+		RetryOptions: RetryOptions{
+			IsRetryable:  func(error) bool { return false },
+			InitialDelay: time.Second,
+			MaxDelay:     50 * time.Millisecond,
+		},
+	})
+	require.NoError(t, err)
+	listener := &timedListener{failures: make(chan time.Time, 2)}
+	stop, err := tm.Start(listener)
+	require.NoError(t, err)
+	defer stop()
+
+	first := <-listener.failures
+	select {
+	case second := <-listener.failures:
+		require.Less(t, second.Sub(first), 500*time.Millisecond, "a new round must start after MaxDelay, not MaxDelay plus InitialDelay")
+	case <-time.After(3 * time.Second):
+		t.Fatal("no new round after a failed one")
+	}
+}
+
 func TestGetTokenReturnsCurrentTokenWhileRenewalFails(t *testing.T) {
 	newManager := func(t *testing.T, idp shared.IdentityProvider, lifetime time.Duration) TokenManager {
 		tm, err := NewTokenManager(idp, TokenManagerOptions{
