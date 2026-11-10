@@ -231,9 +231,15 @@ func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generatio
 	return t, nil, nil
 }
 
-// validToken returns t if it has not expired, otherwise nil.
+// currentTokenMinValidity is how long the current token must still be valid to
+// be handed out when a request for a new one failed, so a caller does not get
+// a token that expires before it can be used.
+const currentTokenMinValidity = time.Second
+
+// validToken returns t if it stays valid for currentTokenMinValidity,
+// otherwise nil.
 func validToken(t *token.Token) *token.Token {
-	if t != nil && time.Now().Before(t.ExpirationOn()) {
+	if t != nil && time.Until(t.ExpirationOn()) > currentTokenMinValidity {
 		return t
 	}
 	return nil
@@ -302,8 +308,12 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		}()
 		maxDelay := e.retryOptions.MaxDelay
 		initialDelay := e.retryOptions.InitialDelay
+		// roundDelay is the wait before a new round after a failed one. It is at
+		// least initialDelay, so a small or negative maxDelay cannot make the
+		// loop send requests and errors without a pause.
+		roundDelay := max(maxDelay, initialDelay)
 		// renewalDelay is the wait before renewing a token that is already due:
-		// initialDelay, or maxDelay after a failed round
+		// initialDelay, or roundDelay after a failed round
 		renewalDelay := initialDelay
 
 		for {
@@ -337,9 +347,9 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 					// check if err is retriable
 					if e.retryOptions.IsRetryable(err) {
 						if i == e.retryOptions.MaxAttempts-1 {
-							// last attempt, call OnError and start a new round after maxDelay
+							// last attempt, call OnError and start a new round after roundDelay
 							listener.OnError(fmt.Errorf("max attempts reached: %w", err))
-							renewalDelay = maxDelay
+							renewalDelay = roundDelay
 							break
 						}
 
@@ -359,9 +369,9 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 						}
 					} else {
 						// not retriable, but the identity provider may recover:
-						// call OnError and start a new round after maxDelay
+						// call OnError and start a new round after roundDelay
 						listener.OnError(err)
-						renewalDelay = maxDelay
+						renewalDelay = roundDelay
 						break
 					}
 				}

@@ -90,28 +90,44 @@ func (l *timedListener) OnError(error) {
 	}
 }
 
-func TestNewRoundStartsAfterMaxDelay(t *testing.T) {
-	idp := &failingIdentityProvider{fail: func(call int32) bool { return call > 1 }}
-	tm, err := NewTokenManager(idp, TokenManagerOptions{
-		LowerRefreshBound: time.Hour, // renew right away
-		RetryOptions: RetryOptions{
-			IsRetryable:  func(error) bool { return false },
-			InitialDelay: time.Second,
-			MaxDelay:     50 * time.Millisecond,
-		},
-	})
-	require.NoError(t, err)
-	listener := &timedListener{failures: make(chan time.Time, 2)}
-	stop, err := tm.Start(listener)
-	require.NoError(t, err)
-	defer stop()
+func TestNewRoundDelay(t *testing.T) {
+	tests := []struct {
+		name         string
+		initialDelay time.Duration
+		maxDelay     time.Duration
+		want         time.Duration
+	}{
+		// not MaxDelay plus InitialDelay
+		{name: "MaxDelay", initialDelay: 400 * time.Millisecond, maxDelay: 800 * time.Millisecond, want: 800 * time.Millisecond},
+		{name: "InitialDelay when MaxDelay is shorter", initialDelay: 300 * time.Millisecond, maxDelay: time.Millisecond, want: 300 * time.Millisecond},
+		{name: "InitialDelay when MaxDelay is negative", initialDelay: 300 * time.Millisecond, maxDelay: -time.Second, want: 300 * time.Millisecond},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idp := &failingIdentityProvider{fail: func(call int32) bool { return call > 1 }}
+			tm, err := NewTokenManager(idp, TokenManagerOptions{
+				LowerRefreshBound: time.Hour, // renew right away
+				RetryOptions: RetryOptions{
+					IsRetryable:  func(error) bool { return false },
+					InitialDelay: tt.initialDelay,
+					MaxDelay:     tt.maxDelay,
+				},
+			})
+			require.NoError(t, err)
+			listener := &timedListener{failures: make(chan time.Time, 2)}
+			stop, err := tm.Start(listener)
+			require.NoError(t, err)
+			defer stop()
 
-	first := <-listener.failures
-	select {
-	case second := <-listener.failures:
-		require.Less(t, second.Sub(first), 500*time.Millisecond, "a new round must start after MaxDelay, not MaxDelay plus InitialDelay")
-	case <-time.After(3 * time.Second):
-		t.Fatal("no new round after a failed one")
+			first := <-listener.failures
+			select {
+			case second := <-listener.failures:
+				require.GreaterOrEqual(t, second.Sub(first), tt.want)
+				require.Less(t, second.Sub(first), tt.want+300*time.Millisecond)
+			case <-time.After(3 * time.Second):
+				t.Fatal("no new round after a failed one")
+			}
+		})
 	}
 }
 
@@ -140,12 +156,11 @@ func TestGetTokenReturnsCurrentTokenWhileRenewalFails(t *testing.T) {
 		require.ErrorContains(t, err, "identity provider unavailable")
 	})
 
-	t.Run("expired token", func(t *testing.T) {
+	t.Run("token about to expire", func(t *testing.T) {
 		idp := &failingIdentityProvider{fail: func(call int32) bool { return call > 1 }}
-		tm := newManager(t, idp, 50*time.Millisecond)
+		tm := newManager(t, idp, currentTokenMinValidity/2)
 		_, err := tm.GetToken(false)
 		require.NoError(t, err)
-		time.Sleep(100 * time.Millisecond)
 
 		_, err = tm.GetToken(false)
 		require.ErrorContains(t, err, "identity provider unavailable")
@@ -205,6 +220,7 @@ func TestNonForcedCallerSharingFailedForcedRequestGetsCurrentToken(t *testing.T)
 	r := <-joined
 	require.NoError(t, r.err)
 	require.Same(t, current, r.token)
+	require.EqualValues(t, 2, idp.calls.Load(), "the non-forced caller must share the forced request")
 }
 
 // lifetimeParser returns tokens that expire after lifetime.
