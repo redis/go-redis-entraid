@@ -89,7 +89,7 @@ func TestAzureChainedTimeoutRetriesAndRecoversDuringRenewal(t *testing.T) {
 	}
 }
 
-func TestAzureChainedTimeoutRenewalStopsAfterRetryBudget(t *testing.T) {
+func TestAzureChainedTimeoutRenewalReportsRetryBudgetExhaustion(t *testing.T) {
 	chain, err := azidentity.NewChainedTokenCredential([]azcore.TokenCredential{renewalTimeoutCredential{}}, nil)
 	require.NoError(t, err)
 	provider := &renewalRecoveryProvider{
@@ -104,7 +104,7 @@ func TestAzureChainedTimeoutRenewalStopsAfterRetryBudget(t *testing.T) {
 		RetryOptions: RetryOptions{
 			MaxAttempts:       3,
 			InitialDelay:      time.Millisecond,
-			MaxDelay:          time.Millisecond,
+			MaxDelay:          time.Second, // no new round before the assertions
 			BackoffMultiplier: 1,
 		},
 	})
