@@ -91,9 +91,11 @@ func main() {
 ### Provider ownership and shutdown
 
 The application owns the credentials provider. One provider can be shared by
-several Redis clients, and closing a client does not close the provider. The
-token manager starts when the provider is created, so close the provider when
-you are done with it, also when Redis dialing failed.
+several Redis clients. The built-in manager obtains an initial token at creation
+and renews periodically while connections are subscribed. Last unsubscribe stops
+periodic renewal. A refresh requested by a reconnect may still finish and supply
+the next connection, but no new requests start while idle. Close the provider
+when you are done with it, including after a failed dial, to cancel outstanding work.
 
 The providers returned by the constructors implement
 `entraid.CredentialsProviderCloser`. Register its cleanup before the clients'
@@ -756,7 +758,7 @@ RetryOptions: manager.RetryOptions{
 ```
 
 ### Q: What happens if token refresh fails?
-A: The library will retry according to the configured `RetryOptions`. If all retries fail, or the error is not retryable, the error will be propagated to the client and a new round of retries starts after `MaxDelay`, or after `InitialDelay` if that is longer. Until the current token expires, new connections keep authenticating with it. A new connection first waits for the failed request, which can take up to about twice `RequestTimeout` when the identity provider does not respond. You can customize the retry behavior by:
+A: A new connection can use a cached token without waiting for a refresh. By default the token needs more than one second of remaining validity. Set `manager.TokenManagerOptions.AllowExpiredToken` to try the last cached token even after local expiry; Redis can reject it. Without a usable token, authentication needs a successful token request. While connections remain subscribed, failed renewal rounds notify listeners and retry according to `RetryOptions`. You can customize the retry behavior by:
 1. Setting the maximum number of attempts
 2. Configuring the initial and maximum delay between retries using `time.Duration` values
 3. Setting the backoff multiplier for exponential backoff
