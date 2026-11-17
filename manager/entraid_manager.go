@@ -22,8 +22,13 @@ type entraidTokenManager struct {
 	// token is the authentication token for the user which should be kept in memory if valid.
 	token *token.Token
 
-	// tokenRWLock is a read-write lock used to protect the token from concurrent access.
-	tokenRWLock *sync.RWMutex
+	// Cache, shared request and lifecycle selection are atomic. No identity
+	// provider, parser, listener or wait runs under this lock.
+	tokenRWLock       *sync.RWMutex
+	acquire           *tokenAcquisition
+	nextDemand        time.Time     // earliest retry from a due cache read
+	changed           chan struct{} // current scheduler's cache version; closed on rotation or stop
+	allowExpiredToken bool
 
 	// identityProviderResponseParser is the parser used to parse the response from the identity provider.
 	// It`s ParseResponse method will be called to parse the response and return the token.
@@ -59,80 +64,82 @@ type entraidTokenManager struct {
 	// It is used to signal the token manager to stop requesting tokens.
 	closedChan chan struct{}
 
-	// ctxMu protects the lifecycle context snapshot used by acquisition workers.
-	ctxMu      sync.RWMutex
-	ctx        context.Context
-	ctxCancel  context.CancelFunc
-	generation uint64
+	// ctx identifies the owner generation of a shared request.
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	// requestTimeout is the timeout for the request to the identity provider.
 	requestTimeout time.Duration
-
-	acquireMu sync.Mutex
-	acquire   *tokenAcquisition
 }
 
 type tokenAcquisition struct {
-	done       chan struct{}
-	token      *token.Token
-	current    *token.Token // valid cached token when the request failed
-	err        error
-	force      bool
-	generation uint64
+	done   chan struct{}
+	token  *token.Token
+	err    error
+	owner  context.Context
+	force  bool
+	demand bool // a foreground reader needs this request, even after unsubscribe
 }
+
+var errLifecycleRetired = fmt.Errorf("token acquisition lifecycle retired: %w", context.Canceled)
 
 // GetTokenWithContext lets a caller stop waiting for a shared token acquisition.
 // Incompatible refresh intent and lifecycle generations wait for the single
 // active worker to finish, then start their own eligible acquisition.
 func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefresh bool) (*token.Token, error) {
+	return e.getToken(ctx, forceRefresh, nil)
+}
+
+// A periodic caller supplies the cache version it scheduled against. Rotation
+// or stop invalidates that decision, including between a timer firing and the
+// worker being installed. Foreground reads have no such precondition.
+func (e *entraidTokenManager) getToken(ctx context.Context, forceRefresh bool, scheduled <-chan struct{}) (*token.Token, error) {
+	var owner context.Context
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		e.ctxMu.RLock()
-		generation := e.generation
-		e.ctxMu.RUnlock()
-		e.acquireMu.Lock()
-		flight := e.acquire
-		if flight == nil {
-			flight = &tokenAcquisition{done: make(chan struct{}), force: forceRefresh, generation: generation}
-			e.acquire = flight
-			go func() {
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						flight.token = nil
-						flight.err = fmt.Errorf("token acquisition panic: %v", recovered)
-					}
-					e.acquireMu.Lock()
-					if e.acquire == flight {
-						e.acquire = nil
-					}
-					close(flight.done)
-					e.acquireMu.Unlock()
-				}()
-				flight.token, flight.current, flight.err = e.getTokenForGeneration(flight.force, flight.generation)
-			}()
-			e.acquireMu.Unlock()
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-flight.done:
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				if flight.generation != generation {
-					continue
-				}
-				return tokenOrCurrent(forceRefresh, flight.token, flight.current, flight.err)
-			}
+		e.tokenRWLock.Lock()
+		if scheduled != nil && scheduled != e.changed {
+			e.tokenRWLock.Unlock()
+			return nil, nil // let the loop reschedule or exit
 		}
-		// A forced caller never joins non-forced work. A non-forced caller may
-		// share a forced flight, since its result is at least as fresh as requested.
-		compatible := flight.generation == generation && (!forceRefresh || flight.force)
-		e.acquireMu.Unlock()
+		if owner != nil && owner != e.ctx {
+			e.tokenRWLock.Unlock()
+			return nil, errLifecycleRetired
+		}
+		owner = e.ctx
+		flight := e.acquire
+		current := e.token
+		if !forceRefresh && current != nil && (e.allowExpiredToken || validToken(current) != nil) {
+			if owner != nil && e.durationToRenewal(current) == 0 {
+				if flight == nil && !time.Now().Before(e.nextDemand) {
+					flight = e.startAcquisition(true)
+				}
+				if flight != nil {
+					flight.demand = true
+				}
+			}
+			e.tokenRWLock.Unlock()
+			return current, nil
+		}
+		if owner == nil {
+			e.tokenRWLock.Unlock()
+			return nil, errLifecycleRetired
+		}
+		if flight == nil {
+			flight = e.startAcquisition(forceRefresh)
+		}
+		compatible := flight.owner == owner && (!forceRefresh || flight.force)
+		if compatible && scheduled == nil {
+			flight.demand = true
+		}
+		e.tokenRWLock.Unlock()
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		case <-scheduled:
+			return nil, nil
 		case <-flight.done:
 			if !compatible {
 				continue
@@ -140,95 +147,75 @@ func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefr
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			return tokenOrCurrent(forceRefresh, flight.token, flight.current, flight.err)
+			return flight.token, flight.err
 		}
 	}
 }
 
 func (e *entraidTokenManager) GetToken(forceRefresh bool) (*token.Token, error) {
-	e.ctxMu.RLock()
-	generation := e.generation
-	e.ctxMu.RUnlock()
-	t, current, err := e.getTokenForGeneration(forceRefresh, generation)
-	return tokenOrCurrent(forceRefresh, t, current, err)
+	return e.GetTokenWithContext(context.Background(), forceRefresh)
 }
 
-// tokenOrCurrent keeps a caller that did not force a refresh on the current
-// token when the identity provider request failed, so new connections can
-// authenticate while the identity provider is unavailable. Forced refreshes,
-// such as renewals, get the error.
-func tokenOrCurrent(forceRefresh bool, t, current *token.Token, err error) (*token.Token, error) {
-	if err != nil && !forceRefresh && current != nil {
-		return current, nil
-	}
-	return t, err
+// Called with tokenRWLock held. Even a retired request keeps its slot until
+// it exits; custom identity providers and parsers need not support concurrency.
+func (e *entraidTokenManager) startAcquisition(force bool) *tokenAcquisition {
+	flight := &tokenAcquisition{done: make(chan struct{}), force: force, owner: e.ctx}
+	e.acquire = flight
+	go func() {
+		ctx, cancel := context.WithTimeout(flight.owner, e.requestTimeout)
+		defer cancel()
+		t, err := e.requestToken(ctx)
+		e.tokenRWLock.Lock()
+		defer e.tokenRWLock.Unlock()
+		if flight.owner != e.ctx {
+			t, err = nil, errLifecycleRetired
+		} else {
+			if err == nil {
+				e.token = t
+				if e.changed != nil {
+					close(e.changed)
+					e.changed = make(chan struct{})
+				}
+			}
+			if force {
+				switch {
+				case err != nil:
+					e.nextDemand = time.Now().Add(max(e.retryOptions.InitialDelay, e.retryOptions.MaxDelay))
+				case e.durationToRenewal(t) == 0:
+					e.nextDemand = time.Now().Add(e.retryOptions.InitialDelay)
+				default:
+					e.nextDemand = time.Time{}
+				}
+			}
+		}
+		flight.token, flight.err = t, err
+		e.acquire = nil
+		close(flight.done)
+	}()
+	return flight
 }
 
-// getTokenForGeneration returns the cached token or requests a new one. When
-// the request fails while the cached token has not expired, it also returns
-// the cached token as current.
-func (e *entraidTokenManager) getTokenForGeneration(forceRefresh bool, generation uint64) (t, current *token.Token, err error) {
-	e.tokenRWLock.RLock()
-	// check if the token is nil and if it is not expired
-	t = e.token
-	duration := e.durationToRenewal(t)
-	if !forceRefresh && t != nil && duration > 0 {
-		e.tokenRWLock.RUnlock()
-		return t, nil, nil
-	}
-	e.tokenRWLock.RUnlock()
-
-	// start the context early,
-	// since at heavy concurrent load
-	// locks may take some time to acquire
-	e.ctxMu.RLock()
-	baseCtx := e.ctx
-	currentGeneration := e.generation
-	e.ctxMu.RUnlock()
-	if generation != currentGeneration {
-		return nil, nil, fmt.Errorf("token acquisition lifecycle retired")
-	}
-	ctx, ctxCancel := context.WithTimeout(baseCtx, e.requestTimeout)
-	defer ctxCancel()
-
-	// Upgrade to write lock for token update
-	e.tokenRWLock.Lock()
-	defer e.tokenRWLock.Unlock()
-
-	// Double-check pattern to avoid unnecessary token refresh
-	t = e.token
-	duration = e.durationToRenewal(t)
-	if !forceRefresh && t != nil && duration > 0 {
-		return t, nil, nil
-	}
-
-	cached := t
+func (e *entraidTokenManager) requestToken(ctx context.Context) (t *token.Token, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			t, err = nil, fmt.Errorf("token acquisition panic: %v", r)
+		}
+	}()
 	// Request a new token from the identity provider
 	idpResult, err := e.idp.RequestToken(ctx)
 	if err != nil {
-		return nil, validToken(cached), fmt.Errorf("failed to request token from idp: %w", err)
+		return nil, fmt.Errorf("failed to request token from idp: %w", err)
 	}
 
 	t, err = e.identityProviderResponseParser.ParseResponse(idpResult)
 	if err != nil {
-		return nil, validToken(cached), fmt.Errorf("failed to parse token: %w", err)
+		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if t == nil {
-		return nil, validToken(cached), fmt.Errorf("failed to get token: token is nil")
+		return nil, fmt.Errorf("failed to get token: token is nil")
 	}
-
-	// Hold the lifecycle read lock through publication so Stop cannot retire
-	// this generation between the check and storing its token.
-	e.ctxMu.RLock()
-	defer e.ctxMu.RUnlock()
-	if generation != e.generation {
-		return nil, nil, fmt.Errorf("token acquisition lifecycle retired")
-	}
-	// Store the token
-	e.token = t
-	// Return the token - no need to copy since it's immutable
-	return t, nil, nil
+	return t, nil
 }
 
 // currentTokenMinValidity is how long the current token must still be valid to
@@ -256,6 +243,16 @@ func (e *entraidTokenManager) Start(listener TokenListener) (StopFunc, error) {
 // StartWithContext starts the refresh loop while allowing the caller to abandon
 // the initial shared token acquisition. A canceled attempt never registers its listener.
 func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener TokenListener) (StopFunc, error) {
+	return e.start(ctx, listener, false)
+}
+
+// StartSubscriptions pauses only periodic work when the last connection leaves.
+func (e *entraidTokenManager) StartSubscriptions(ctx context.Context, listener TokenListener) (internal.StopRenewal, error) {
+	stop, err := e.start(ctx, listener, true)
+	return internal.StopRenewal(stop), err
+}
+
+func (e *entraidTokenManager) start(ctx context.Context, listener TokenListener, keepDemand bool) (StopFunc, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -265,26 +262,21 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		return nil, ctx.Err()
 	}
 	defer func() { <-e.startGate }()
-	if e.listener != nil {
+	if e.closedChan != nil && !internal.IsClosed(e.closedChan) {
 		return nil, ErrTokenManagerAlreadyStarted
 	}
 
-	// Ensure a prior refresh loop has stopped before creating a replacement.
-	if e.closedChan != nil && !internal.IsClosed(e.closedChan) {
-		close(e.closedChan)
-	}
-
-	e.ctxMu.Lock()
+	e.tokenRWLock.Lock()
 	// A canceled Start leaves shared work owned by this lifecycle. Do not replace
 	// its cancel handle until Stop has retired it.
 	if e.ctx == nil || e.ctx.Err() != nil {
 		e.ctx, e.ctxCancel = context.WithCancel(context.Background())
 	}
-	e.ctxMu.Unlock()
+	e.tokenRWLock.Unlock()
 
 	// Make sure there is a token in memory before starting the loop. The
 	// acquisition worker is shared and is not canceled when this caller leaves.
-	_, err := e.GetTokenWithContext(ctx, false)
+	initial, err := e.GetTokenWithContext(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
@@ -292,10 +284,17 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		return nil, err
 	}
 
-	e.closedChan = make(chan struct{})
-	e.listener = listener
+	closed := make(chan struct{})
+	e.closedChan, e.listener = closed, listener
+	e.tokenRWLock.Lock()
+	e.changed = make(chan struct{})
+	seen := e.changed
+	if initial != e.token {
+		seen = nil // rotation between the initial read and starting this loop
+	}
+	e.tokenRWLock.Unlock()
 
-	go func(listener TokenListener, closed <-chan struct{}) {
+	go func() {
 		// Add panic recovery to prevent crashes
 		defer func() {
 			if r := recover(); r != nil {
@@ -316,32 +315,37 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 		// initialDelay, or roundDelay after a failed round
 		renewalDelay := initialDelay
 
+	rounds:
 		for {
 			e.tokenRWLock.RLock()
-			timeToRenewal := e.durationToRenewal(e.token)
+			t, changed := e.token, e.changed
+			timeToRenewal := e.durationToRenewal(t)
+			if timeToRenewal == 0 {
+				timeToRenewal = max(renewalDelay, time.Until(e.nextDemand))
+			}
 			e.tokenRWLock.RUnlock()
+			if internal.IsClosed(closed) {
+				return
+			}
+			if seen != changed {
+				seen, renewalDelay = changed, initialDelay
+				listener.OnNext(t)
+				continue
+			}
 			select {
 			case <-closed:
 				return
+			case <-changed:
+				continue
 			case <-time.After(timeToRenewal):
-				if timeToRenewal == 0 {
-					// Token was requested immediately, guard against infinite loop
-					select {
-					case <-closed:
-						return
-					case <-time.After(renewalDelay):
-						// continue to attempt
-					}
-				}
 				renewalDelay = initialDelay
 
 				// Token is about to expire, refresh it
 				delay := initialDelay
 				for i := 0; i < e.retryOptions.MaxAttempts; i++ {
-					t, err := e.GetToken(true)
-					if err == nil {
-						listener.OnNext(t)
-						break
+					_, err := e.getToken(context.Background(), true, changed)
+					if err == nil || internal.IsClosed(closed) {
+						break // next iteration observes the published token or stop
 					}
 
 					// check if err is retriable
@@ -364,6 +368,8 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 						select {
 						case <-closed:
 							return
+						case <-changed:
+							continue rounds
 						case <-time.After(delay):
 							// continue to next attempt
 						}
@@ -377,9 +383,9 @@ func (e *entraidTokenManager) StartWithContext(ctx context.Context, listener Tok
 				}
 			}
 		}
-	}(listener, e.closedChan)
+	}()
 
-	return e.stop, nil
+	return func() error { return e.stopRun(closed, keepDemand) }, nil
 }
 
 // Stop retires both active renewal and acquisition from an abandoned startup.
@@ -393,7 +399,9 @@ func (e *entraidTokenManager) Stop() error {
 }
 
 // stop closes the token manager and releases any resources.
-func (e *entraidTokenManager) stop() (err error) {
+func (e *entraidTokenManager) stop() error { return e.stopRun(nil, false) }
+
+func (e *entraidTokenManager) stopRun(closed <-chan struct{}, keepDemand bool) (err error) {
 	e.startGate <- struct{}{}
 	defer func() { <-e.startGate }()
 	defer func() {
@@ -403,24 +411,28 @@ func (e *entraidTokenManager) stop() (err error) {
 		}
 	}()
 
-	e.ctxMu.Lock()
-	ctxCancel := e.ctxCancel
-	e.generation++
-	e.ctxMu.Unlock()
-	if ctxCancel != nil {
-		ctxCancel()
-	}
-
-	if e.closedChan == nil || e.listener == nil {
+	e.tokenRWLock.Lock()
+	defer e.tokenRWLock.Unlock()
+	if closed != nil && (closed != e.closedChan || e.changed == nil) {
 		return ErrTokenManagerAlreadyStopped
 	}
-
-	e.listener = nil
-
-	// Safely close the channel - only close if not already closed
-	if !internal.IsClosed(e.closedChan) {
-		close(e.closedChan)
+	if !keepDemand || (e.acquire != nil && !e.acquire.demand) {
+		if e.ctxCancel != nil {
+			e.ctxCancel()
+		}
+		e.ctx, e.ctxCancel = nil, nil
+		if keepDemand {
+			e.ctx, e.ctxCancel = context.WithCancel(context.Background())
+		} else {
+			e.nextDemand = time.Time{}
+		}
 	}
+	if e.changed == nil {
+		return ErrTokenManagerAlreadyStopped
+	}
+	close(e.closedChan)
+	close(e.changed)
+	e.changed, e.listener = nil, nil
 
 	return nil
 }

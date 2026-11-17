@@ -49,6 +49,11 @@ type TokenManagerOptions struct {
 	//
 	// default: 30 seconds
 	RequestTimeout time.Duration
+
+	// AllowExpiredToken lets non-forced reads return the cached credential even
+	// after local expiry. Redis AUTH can still reject it. By default the cache
+	// must have more than one second of validity; forced reads never fall back.
+	AllowExpiredToken bool
 }
 
 // RetryOptions is a struct that contains the options for retrying the token request.
@@ -86,7 +91,9 @@ type RetryOptions struct {
 // It is typically used in conjunction with an IdentityProvider to obtain the token.
 type TokenManager interface {
 	// GetToken returns the token for authentication.
-	// It takes a boolean value forceRefresh as an argument.
+	// Non-forced reads return usable cached credentials without waiting for
+	// acquisition. A due read can request one refresh even without Start;
+	// only Start schedules periodic retries.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a stopper function to stop the token manager
 	Start(listener TokenListener) (StopFunc, error)
@@ -139,6 +146,7 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
+		allowExpiredToken:              options.AllowExpiredToken,
 		tokenRWLock:                    &sync.RWMutex{},
 		startGate:                      make(chan struct{}, 1),
 	}, nil

@@ -150,7 +150,7 @@ func TestGetTokenReturnsCurrentTokenWhileRenewalFails(t *testing.T) {
 		got, err := tm.GetToken(false)
 		require.NoError(t, err)
 		require.Same(t, current, got)
-		require.EqualValues(t, 2, idp.calls.Load(), "a renewal must still be attempted")
+		require.Eventually(t, func() bool { return idp.calls.Load() == 2 }, time.Second, time.Millisecond, "due read must request renewal")
 
 		_, err = tm.GetToken(true)
 		require.ErrorContains(t, err, "identity provider unavailable")
@@ -213,13 +213,16 @@ func TestNonForcedCallerSharingFailedForcedRequestGetsCurrentToken(t *testing.T)
 		tk, err := tm.GetTokenWithContext(context.Background(), false)
 		joined <- result{tk, err}
 	}()
-	time.Sleep(50 * time.Millisecond) // let the non-forced caller join the forced request
+	select {
+	case r := <-joined:
+		require.NoError(t, r.err)
+		require.Same(t, current, r.token)
+	case <-time.After(time.Second):
+		close(idp.release)
+		t.Fatal("usable cached read waited for the forced request")
+	}
 	close(idp.release)
-
 	require.ErrorContains(t, <-forced, "identity provider unavailable")
-	r := <-joined
-	require.NoError(t, r.err)
-	require.Same(t, current, r.token)
 	require.EqualValues(t, 2, idp.calls.Load(), "the non-forced caller must share the forced request")
 }
 

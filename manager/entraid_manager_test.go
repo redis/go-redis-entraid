@@ -478,34 +478,29 @@ func (c *flightWaitObservedContext) Done() <-chan struct{} {
 	return c.Context.Done()
 }
 
-func TestForcedCallerDoesNotJoinNonForcedCacheFlight(t *testing.T) {
+func TestForcedCallerDoesNotJoinNonForcedAcquisition(t *testing.T) {
 	idp := &mockIdentityProvider{}
 	parser := &mockIdentityProviderResponseParser{}
+	entered, release := make(chan struct{}), make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
+	cached := token.New("user", "pass", "cached", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds())
+	idp.On("RequestToken", mock.Anything).Run(func(mock.Arguments) { close(entered); <-release }).Return(shared.IdentityProviderResponse(nil), nil).Once()
+	parser.On("ParseResponse", shared.IdentityProviderResponse(nil)).Return(cached, nil).Once()
 	fresh := token.New("user", "pass", "fresh", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds())
 	idp.On("RequestToken", mock.Anything).Return(shared.IdentityProviderResponse(nil), nil).Once()
 	parser.On("ParseResponse", shared.IdentityProviderResponse(nil)).Return(fresh, nil).Once()
 	m := &entraidTokenManager{
 		idp: idp, identityProviderResponseParser: parser,
-		token:       token.New("user", "pass", "cached", time.Now().Add(time.Hour), time.Now(), time.Hour.Milliseconds()),
 		tokenRWLock: &sync.RWMutex{}, expirationRefreshRatio: 0.75,
 		lowerBoundDuration: time.Second, requestTimeout: time.Second, ctx: context.Background(),
 	}
-	m.tokenRWLock.Lock()
 	nonforced := make(chan error, 1)
 	go func() { _, err := m.GetTokenWithContext(context.Background(), false); nonforced <- err }()
-	deadline := time.Now().Add(time.Second)
-	for {
-		m.acquireMu.Lock()
-		installed := m.acquire != nil
-		m.acquireMu.Unlock()
-		if installed {
-			break
-		}
-		if time.Now().After(deadline) {
-			m.tokenRWLock.Unlock()
-			t.Fatal("non-forced flight was not installed")
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("non-forced acquisition did not start")
 	}
 	forced := make(chan *token.Token, 1)
 	forcedContext := &flightWaitObservedContext{Context: context.Background(), waiting: make(chan struct{})}
@@ -513,10 +508,9 @@ func TestForcedCallerDoesNotJoinNonForcedCacheFlight(t *testing.T) {
 	select {
 	case <-forcedContext.waiting:
 	case <-time.After(time.Second):
-		m.tokenRWLock.Unlock()
 		t.Fatal("forced caller did not reach the active-flight wait")
 	}
-	m.tokenRWLock.Unlock()
+	unblock()
 	if err := <-nonforced; err != nil {
 		t.Fatal(err)
 	}

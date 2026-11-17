@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/redis/go-redis-entraid/internal"
 	"github.com/redis/go-redis-entraid/manager"
 	"github.com/redis/go-redis-entraid/token"
 	"github.com/redis/go-redis/v9/auth"
@@ -32,9 +33,14 @@ type entraidCredentialsProvider struct {
 	tokenManager     manager.TokenManager // Manages token retrieval.
 	stopTokenManager manager.StopFunc     // Function to stop the token manager.
 
+	// Owner Close cancels built-in setup waits before waiting for reservations.
+	setupCtx    context.Context
+	cancelSetup context.CancelFunc
+
 	// listeners is a slice of listeners that are notified when the token manager receives a new token.
 	listeners     []auth.CredentialsListener // Slice of listeners notified on token updates.
 	registrations map[auth.CredentialsListener]*listenerRegistration
+	rotation      uint64 // under rwLock; detects a rotation during the registration read
 
 	// rwLock is a mutex that is used to synchronize access to the listeners slice.
 	rwLock sync.RWMutex // Mutex for synchronizing access to the listeners slice.
@@ -64,11 +70,12 @@ type managerOperation struct {
 // after releasing it. An already-snapshotted callback may finish after unsubscribe returns.
 // It notifies all registered listeners with the new token.
 func (e *entraidCredentialsProvider) onTokenNext(t *token.Token) {
-	e.rwLock.RLock()
+	e.rwLock.Lock()
+	e.rotation++
 	// Make a deep copy of the listeners slice to avoid data race
 	listeners := make([]auth.CredentialsListener, len(e.listeners))
 	copy(listeners, e.listeners)
-	e.rwLock.RUnlock()
+	e.rwLock.Unlock()
 	// Notify all listeners with the new token.
 	for _, listener := range listeners {
 		listener.OnNext(t)
@@ -119,6 +126,12 @@ func (e *entraidCredentialsProvider) SubscribeWithContext(ctx context.Context, l
 	return e.subscribeContext(ctx, listener)
 }
 
+// The built-in manager distinguishes last-unsubscribe from owner shutdown.
+// Custom managers keep their Start/StopFunc contract.
+type subscriptionManager interface {
+	StartSubscriptions(context.Context, manager.TokenListener) (internal.StopRenewal, error)
+}
+
 type contextTokenManager interface {
 	StartWithContext(context.Context, manager.TokenListener) (manager.StopFunc, error)
 	GetTokenWithContext(context.Context, bool) (*token.Token, error)
@@ -144,8 +157,8 @@ func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) er
 }
 
 // finishSubscription completes a deferred last-listener stop request once the
-// final pending setup exits. The stopRequested flag is set only by an actual
-// last unsubscribe, so caller cancellation alone does not stop shared work.
+// final pending setup exits. A built-in scheduler with no successful setup
+// also stops; any demand-driven acquisition remains available to peers.
 func (e *entraidCredentialsProvider) finishSubscription() error {
 	e.stateMu.Lock()
 	e.pending--
@@ -218,7 +231,12 @@ func (e *entraidCredentialsProvider) completeStart(ctx context.Context, op *mana
 		e.stateMu.Unlock()
 	}()
 	var stop manager.StopFunc
-	if cm, ok := e.tokenManager.(contextTokenManager); ok {
+	sm, builtin := e.tokenManager.(subscriptionManager)
+	if builtin {
+		var pause internal.StopRenewal
+		pause, err = sm.StartSubscriptions(ctx, tokenListenerFromCP(e))
+		stop = manager.StopFunc(pause)
+	} else if cm, ok := e.tokenManager.(contextTokenManager); ok {
 		stop, err = cm.StartWithContext(ctx, tokenListenerFromCP(e))
 	} else {
 		stop, err = e.tokenManager.Start(tokenListenerFromCP(e))
@@ -226,7 +244,7 @@ func (e *entraidCredentialsProvider) completeStart(ctx context.Context, op *mana
 	e.stateMu.Lock()
 	if err == nil {
 		e.stopTokenManager = stop
-		e.stopRequested = false
+		e.stopRequested = builtin // cleared when a listener registers
 	}
 	op.err = err
 	e.stateMu.Unlock()
@@ -279,30 +297,46 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 			err = errors.Join(err, cleanupErr)
 		}
 	}()
+	if e.setupCtx != nil {
+		waitCtx, cancel := context.WithCancel(ctx)
+		stop := context.AfterFunc(e.setupCtx, cancel)
+		defer func() { stop(); cancel() }()
+		ctx = waitCtx
+	}
 	err = e.ensureStarted(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
 	}
 	var tk *token.Token
-	if cm, ok := e.tokenManager.(contextTokenManager); ok {
-		tk, err = cm.GetTokenWithContext(ctx, false)
-	} else {
-		tk, err = e.tokenManager.GetToken(false)
-	}
-	if err == nil {
-		err = ctx.Err()
-	}
-	if err != nil {
-		// The manager belongs to the provider, not this setup attempt. Keep
-		// shared work available to later subscribers when this waiter leaves.
-		return nil, nil, fmt.Errorf("couldn't get token: %w", err)
-	}
-	e.stateMu.Lock()
-	if e.closed {
+	_, builtin := e.tokenManager.(subscriptionManager)
+	for {
+		e.rwLock.RLock()
+		before := e.rotation
+		e.rwLock.RUnlock()
+		if cm, ok := e.tokenManager.(contextTokenManager); ok {
+			tk, err = cm.GetTokenWithContext(ctx, false)
+		} else {
+			tk, err = e.tokenManager.GetToken(false)
+		}
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("couldn't get token: %w", err)
+		}
+		e.stateMu.Lock()
+		if e.closed {
+			e.stateMu.Unlock()
+			return nil, nil, ErrCredentialsProviderClosed
+		}
+		e.rwLock.Lock()
+		if !builtin || before == e.rotation {
+			break
+		}
+		// This reader missed a rotation before it was registered.
+		e.rwLock.Unlock()
 		e.stateMu.Unlock()
-		return nil, nil, ErrCredentialsProviderClosed
 	}
-	e.rwLock.Lock()
 	registration := e.registrations[listener]
 	if registration == nil {
 		registration = &listenerRegistration{active: true}
@@ -374,7 +408,15 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		options:      options,
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
-	// Start the token manager.
+	if _, ok := tokenManager.(subscriptionManager); ok {
+		// Validate initial credentials, but don't schedule periodic work until
+		// the first subscription. The owner must Close to retire outstanding work.
+		if _, err := tokenManager.GetToken(false); err != nil {
+			return nil, fmt.Errorf("couldn't acquire initial token: %w", err)
+		}
+		cp.setupCtx, cp.cancelSetup = context.WithCancel(context.Background())
+		return cp, nil
+	}
 	stop, err := tokenManager.Start(tokenListenerFromCP(cp))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't start token manager: %w", err)

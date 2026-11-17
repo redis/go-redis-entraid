@@ -41,6 +41,9 @@ func (e *entraidCredentialsProvider) Close() (err error) {
 		return nil
 	}
 	e.closed = true
+	if e.cancelSetup != nil {
+		e.cancelSetup()
+	}
 	e.rwLock.Lock()
 	for _, r := range e.registrations {
 		r.active = false
