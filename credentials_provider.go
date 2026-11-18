@@ -33,14 +33,15 @@ type entraidCredentialsProvider struct {
 	tokenManager     manager.TokenManager // Manages token retrieval.
 	stopTokenManager manager.StopFunc     // Function to stop the token manager.
 
-	// Owner Close cancels built-in setup waits before waiting for reservations.
+	// Close cancels setupCtx so built-in subscriptions stop waiting for a token
+	// before Close waits for them. Nil for custom managers.
 	setupCtx    context.Context
 	cancelSetup context.CancelFunc
 
 	// listeners is a slice of listeners that are notified when the token manager receives a new token.
 	listeners     []auth.CredentialsListener // Slice of listeners notified on token updates.
 	registrations map[auth.CredentialsListener]*listenerRegistration
-	rotation      uint64 // under rwLock; detects a rotation during the registration read
+	rotation      uint64 // counts published tokens under rwLock; setup retries if it changed during its token read
 
 	// rwLock is a mutex that is used to synchronize access to the listeners slice.
 	rwLock sync.RWMutex // Mutex for synchronizing access to the listeners slice.
@@ -157,8 +158,9 @@ func (e *entraidCredentialsProvider) reserveSubscription(ctx context.Context) er
 }
 
 // finishSubscription completes a deferred last-listener stop request once the
-// final pending setup exits. A built-in scheduler with no successful setup
-// also stops; any demand-driven acquisition remains available to peers.
+// final pending setup exits. Caller cancellation alone does not stop shared
+// work. For the built-in manager, a scheduler started by a setup that never
+// registered also stops; a refresh a reader requested keeps running.
 func (e *entraidCredentialsProvider) finishSubscription() error {
 	e.stateMu.Lock()
 	e.pending--
@@ -297,6 +299,7 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 			err = errors.Join(err, cleanupErr)
 		}
 	}()
+	// Let Close interrupt this wait for a built-in token.
 	if e.setupCtx != nil {
 		waitCtx, cancel := context.WithCancel(ctx)
 		stop := context.AfterFunc(e.setupCtx, cancel)
@@ -308,6 +311,9 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 		return nil, nil, fmt.Errorf("couldn't start token manager: %w", err)
 	}
 	var tk *token.Token
+	// The built-in manager can publish a token between this read and
+	// registration; read again so the listener does not start with a
+	// superseded token. Custom managers keep a single read.
 	_, builtin := e.tokenManager.(subscriptionManager)
 	for {
 		e.rwLock.RLock()
@@ -333,7 +339,6 @@ func (e *entraidCredentialsProvider) subscribeContext(ctx context.Context, liste
 		if !builtin || before == e.rotation {
 			break
 		}
-		// This reader missed a rotation before it was registered.
 		e.rwLock.Unlock()
 		e.stateMu.Unlock()
 	}
@@ -393,7 +398,8 @@ func (e *entraidCredentialsProvider) unsubscribe(listener auth.CredentialsListen
 }
 
 // NewCredentialsProvider creates a new credentials provider with the specified token manager and options.
-// It returns a StreamingCredentialsProvider interface and an error if the token manager cannot be started.
+// It returns a StreamingCredentialsProvider interface and an error if the initial token cannot be obtained
+// or the token manager cannot be started.
 //
 // Parameters:
 // - tokenManager: The TokenManager used to obtain tokens.
@@ -401,7 +407,7 @@ func (e *entraidCredentialsProvider) unsubscribe(listener auth.CredentialsListen
 //
 // Returns:
 // - auth.StreamingCredentialsProvider: The newly created credentials provider.
-// - error: An error if the token manager cannot be started.
+// - error: An error if the initial token cannot be obtained or the token manager cannot be started.
 func NewCredentialsProvider(tokenManager manager.TokenManager, options CredentialsProviderOptions) (auth.StreamingCredentialsProvider, error) {
 	cp := &entraidCredentialsProvider{
 		tokenManager: tokenManager,
@@ -409,8 +415,9 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
 	if _, ok := tokenManager.(subscriptionManager); ok {
-		// Validate initial credentials, but don't schedule periodic work until
-		// the first subscription. The owner must Close to retire outstanding work.
+		// Fetch the initial token now so construction still fails on unusable
+		// credentials, but start periodic renewal only with the first
+		// subscription. The owner must Close to cancel outstanding work.
 		if _, err := tokenManager.GetToken(false); err != nil {
 			return nil, fmt.Errorf("couldn't acquire initial token: %w", err)
 		}

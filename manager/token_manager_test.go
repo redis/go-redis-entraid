@@ -993,7 +993,7 @@ func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
 	})
 }
 
-// Take a snapshot before inspecting timing while the renewal goroutine is active.
+// cachedTokenForTest reads the cached token under its lock while renewal may replace it.
 func cachedTokenForTest(tm *entraidTokenManager) *token.Token {
 	tm.tokenRWLock.RLock()
 	defer tm.tokenRWLock.RUnlock()
