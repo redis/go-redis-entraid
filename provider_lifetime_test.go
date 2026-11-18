@@ -2,7 +2,6 @@ package entraid
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -120,48 +119,35 @@ func TestOwnerCloseCancelsPendingUnboundedSubscription(t *testing.T) {
 	require.ErrorIs(t, demandSignal(t, pending), context.Canceled)
 }
 
-// Pause just after the cache snapshot, letting a rotation reach the provider
-// before the new listener is registered.
-type registrationRaceManager struct {
+type rotatingManager struct {
 	regressionManager
-	cached           atomic.Pointer[token.Token]
-	entered, release chan struct{}
-	once             sync.Once
+	listener manager.TokenListener
+	next     *token.Token
 }
 
-func (m *registrationRaceManager) StartSubscriptions(context.Context, manager.TokenListener) (internal.StopRenewal, error) {
+func (m *rotatingManager) StartSubscriptions(_ context.Context, l manager.TokenListener) (internal.StopRenewal, error) {
+	m.listener = l
 	return func() error { return nil }, nil
 }
-func (m *registrationRaceManager) GetTokenWithContext(context.Context, bool) (*token.Token, error) {
-	tk := m.cached.Load()
-	m.once.Do(func() { close(m.entered); <-m.release })
-	return tk, nil
+func (m *rotatingManager) GetTokenWithContext(context.Context, bool) (*token.Token, error) {
+	snapshot := m.token
+	if m.next != nil {
+		// Notify the provider before the subscriber can register with this snapshot.
+		m.token, m.next = m.next, nil
+		m.listener.OnNext(m.token)
+	}
+	return snapshot, nil
 }
+
 func TestSubscribeDoesNotMissRefreshDuringRegistration(t *testing.T) {
-	old := regressionToken()
 	now := time.Now()
 	fresh := token.New("user", "new", "new", now.Add(time.Hour), now, time.Hour.Milliseconds())
-	m := &registrationRaceManager{regressionManager: regressionManager{token: old}, entered: make(chan struct{}), release: make(chan struct{})}
-	m.cached.Store(old)
-	value, err := NewCredentialsProvider(m, CredentialsProviderOptions{})
+	m := &rotatingManager{regressionManager: regressionManager{token: regressionToken()}, next: fresh}
+	p, err := NewCredentialsProvider(m, CredentialsProviderOptions{})
 	require.NoError(t, err)
-	p := value.(*entraidCredentialsProvider)
-	defer p.Close()
-	unblock := sync.OnceFunc(func() { close(m.release) })
-	defer unblock()
-	result := make(chan string, 1)
-	go func() {
-		tk, unsub, err := p.Subscribe(&distinctSilentListener{})
-		if err != nil {
-			result <- err.Error()
-			return
-		}
-		defer unsub()
-		result <- tk.RawCredentials()
-	}()
-	demandSignal(t, m.entered)
-	m.cached.Store(fresh)
-	p.onTokenNext(fresh)
-	unblock()
-	require.Equal(t, fresh.RawCredentials(), demandSignal(t, result))
+	defer p.(CredentialsProviderCloser).Close()
+	tk, unsub, err := p.Subscribe(&distinctSilentListener{})
+	require.NoError(t, err)
+	defer unsub()
+	require.Equal(t, fresh.RawCredentials(), tk.RawCredentials())
 }

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -187,43 +188,64 @@ func (p *gatedIdentityProvider) RequestToken(context.Context) (shared.IdentityPr
 	return nil, errors.New("identity provider unavailable")
 }
 
-func TestNonForcedCallerSharingFailedForcedRequestGetsCurrentToken(t *testing.T) {
-	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{})}
+// Delay the reader's first context check until the later identity request starts.
+type delayedReaderContext struct {
+	context.Context
+	entered, refreshStarted chan struct{}
+	once                    sync.Once
+}
+
+func (c *delayedReaderContext) Err() error {
+	c.once.Do(func() {
+		close(c.entered)
+		select {
+		case <-c.refreshStarted:
+		case <-c.Done():
+		}
+	})
+	return c.Context.Err()
+}
+
+func TestDelayedReaderUsesTokenPublishedBeforeLaterRefresh(t *testing.T) {
+	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{}, 1)}
+	defer close(idp.release)
 	tokenManager, err := NewTokenManager(idp, TokenManagerOptions{
 		LowerRefreshBound:              time.Hour, // every request is a renewal
 		IdentityProviderResponseParser: lifetimeParser(time.Hour),
 	})
 	require.NoError(t, err)
 	tm := tokenManager.(*entraidTokenManager)
-	current, err := tm.GetToken(false)
-	require.NoError(t, err)
-
-	forced := make(chan error, 1)
+	defer tm.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	reader := &delayedReaderContext{Context: ctx, entered: make(chan struct{}), refreshStarted: idp.entered}
+	var got *token.Token
+	var readErr error
+	done := make(chan struct{})
 	go func() {
-		_, err := tm.GetTokenWithContext(context.Background(), true)
-		forced <- err
-	}()
-	<-idp.entered
-	type result struct {
-		token *token.Token
-		err   error
-	}
-	joined := make(chan result, 1)
-	go func() {
-		tk, err := tm.GetTokenWithContext(context.Background(), false)
-		joined <- result{tk, err}
+		got, readErr = tm.GetTokenWithContext(reader, false)
+		close(done)
 	}()
 	select {
-	case r := <-joined:
-		require.NoError(t, r.err)
-		require.Same(t, current, r.token)
-	case <-time.After(time.Second):
-		close(idp.release)
-		t.Fatal("usable cached read waited for the forced request")
+	case <-reader.entered:
+	case <-ctx.Done():
+		t.Fatal("reader did not reach token lookup")
 	}
-	close(idp.release)
+
+	current, err := tm.GetTokenWithContext(ctx, false)
+	require.NoError(t, err)
+	forced := make(chan error, 1)
+	go func() { _, err := tm.GetTokenWithContext(ctx, true); forced <- err }()
+	select {
+	case <-done:
+		require.NoError(t, readErr, "cached read waited for the later refresh")
+		require.Same(t, current, got)
+	case <-ctx.Done():
+		t.Fatal("cached read waited for the later refresh")
+	}
+	idp.release <- struct{}{}
 	require.ErrorContains(t, <-forced, "identity provider unavailable")
-	require.EqualValues(t, 2, idp.calls.Load(), "the non-forced caller must share the forced request")
+	require.EqualValues(t, 2, idp.calls.Load(), "the cached read must not start another request")
 }
 
 // lifetimeParser returns tokens that expire after lifetime.
