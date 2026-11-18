@@ -119,3 +119,92 @@ func TestRestartDoesNotBypassDemandBackoff(t *testing.T) {
 	}
 	require.EqualValues(t, 2, idp.calls.Load(), "reconnects must respect the failed demand request's backoff")
 }
+
+// Pause a caller at its initial context check, before it selects a token or a request.
+type pausedLookupContext struct {
+	context.Context
+	pause func()
+}
+
+func (c pausedLookupContext) Err() error {
+	c.pause()
+	return c.Context.Err()
+}
+
+func TestDelayedReaderUsesTokenPublishedBeforeLaterRefresh(t *testing.T) {
+	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	defer close(idp.release)
+	m, err := NewTokenManager(idp, TokenManagerOptions{IdentityProviderResponseParser: lifetimeParser(time.Hour)})
+	require.NoError(t, err)
+	tm := m.(*entraidTokenManager)
+	defer tm.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	entered, resume := make(chan struct{}), make(chan struct{})
+	reader := pausedLookupContext{ctx, sync.OnceFunc(func() {
+		close(entered)
+		select {
+		case <-resume:
+		case <-ctx.Done():
+		}
+	})}
+	var got *token.Token
+	var readErr error
+	done := make(chan struct{})
+	go func() {
+		got, readErr = tm.GetTokenWithContext(reader, false)
+		close(done)
+	}()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("reader did not reach token lookup")
+	}
+
+	fresh, err := tm.GetTokenWithContext(ctx, true)
+	require.NoError(t, err)
+	go tm.GetToken(true) // the next request blocks in the identity provider
+	select {
+	case <-idp.entered:
+	case <-ctx.Done():
+		t.Fatal("later refresh did not start")
+	}
+	close(resume)
+	select {
+	case <-done:
+		require.NoError(t, readErr, "cached read waited for the later refresh")
+		require.Same(t, fresh, got)
+	case <-ctx.Done():
+		t.Fatal("cached read waited for the later refresh")
+	}
+}
+
+func TestRetiredTimerCannotRefreshAfterRestart(t *testing.T) {
+	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	defer close(idp.release)
+	m, err := NewTokenManager(idp, TokenManagerOptions{IdentityProviderResponseParser: lifetimeParser(time.Hour)})
+	require.NoError(t, err)
+	tm := m.(*entraidTokenManager)
+	defer tm.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	stop, err := tm.StartSubscriptions(ctx, lifecycleTestListener{})
+	require.NoError(t, err)
+	tm.tokenRWLock.RLock()
+	scheduled := tm.changed
+	tm.tokenRWLock.RUnlock()
+
+	// Model a timer that fired just before the last socket left: its renewal
+	// reaches getToken only after a new socket has restarted the scheduler.
+	require.NoError(t, stop())
+	_, err = tm.StartSubscriptions(ctx, lifecycleTestListener{})
+	require.NoError(t, err)
+	_, err = tm.getToken(ctx, true, scheduled)
+	require.NoError(t, err)
+	tm.tokenRWLock.RLock()
+	defer tm.tokenRWLock.RUnlock()
+	// A second request would occupy the slot until the test releases the provider.
+	require.Nil(t, tm.acquire, "retired timer installed a new request")
+	require.EqualValues(t, 1, idp.calls.Load(), "only the initial token was needed")
+}
