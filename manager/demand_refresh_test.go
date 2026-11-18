@@ -22,7 +22,7 @@ func (p blockedParser) ParseResponse(shared.IdentityProviderResponse) (*token.To
 	return nil, errors.New("parser failed")
 }
 
-func TestLimitedDemandDuringBlockedParser(t *testing.T) {
+func TestCachedReadDuringBlockedParse(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		lifetime time.Duration
@@ -142,7 +142,8 @@ func TestRetiredTimerCannotRefresh(t *testing.T) {
 			require.NoError(t, err)
 			tm.tokenRWLock.RLock()
 			defer tm.tokenRWLock.RUnlock()
-			// A second request would occupy the slot until the test releases the provider.
+			// A request from the stale timer would still be blocked in the provider
+			// and remain in tm.acquire.
 			require.Nil(t, tm.acquire, "retired timer installed a new request")
 			require.EqualValues(t, 1, idp.calls.Load(), "only the initial token was needed")
 		})
