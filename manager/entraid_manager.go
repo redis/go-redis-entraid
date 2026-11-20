@@ -28,8 +28,9 @@ type entraidTokenManager struct {
 	// while it is held.
 	tokenRWLock *sync.RWMutex
 	acquire     *tokenAcquisition
-	// nextDemand is the earliest next refresh of a still-due token after a
-	// forced request; cache reads and the renewal loop both honor it.
+	// nextDemand is the earliest time a cache read can start a background refresh
+	// or the renewal loop can start a new round. Explicit forced reads and
+	// retries within a round do not wait for this deadline.
 	nextDemand time.Time
 	// changed is closed and replaced when a token is published, and closed
 	// and cleared when the scheduler stops.
@@ -98,22 +99,25 @@ var errLifecycleRetired = fmt.Errorf("token acquisition lifecycle retired: %w", 
 // Incompatible refresh intent and lifecycle generations wait for the single
 // active worker to finish, then start their own eligible acquisition.
 func (e *entraidTokenManager) GetTokenWithContext(ctx context.Context, forceRefresh bool) (*token.Token, error) {
-	return e.getToken(ctx, forceRefresh, nil)
+	return e.getToken(ctx, forceRefresh, nil, 0)
 }
 
-// A periodic caller supplies the cache version it scheduled against. Rotation
-// or stop invalidates that decision, including between a timer firing and the
-// worker being installed. Foreground reads have no such precondition.
-func (e *entraidTokenManager) getToken(ctx context.Context, forceRefresh bool, scheduled <-chan struct{}) (*token.Token, error) {
+// If the token changes or renewal stops after the timer is armed, discard that
+// timer. Check nextDemand before starting a scheduled refresh. Retries of that
+// refresh use the renewal loop's own backoff. Foreground reads have no timer.
+func (e *entraidTokenManager) getToken(ctx context.Context, forceRefresh bool, scheduled <-chan struct{}, attempt int) (*token.Token, error) {
 	var owner context.Context
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		e.tokenRWLock.Lock()
-		if scheduled != nil && scheduled != e.changed {
-			e.tokenRWLock.Unlock()
-			return nil, nil // let the loop reschedule or exit
+		if scheduled != nil {
+			inBackoff := attempt == 0 && time.Now().Before(e.nextDemand)
+			if scheduled != e.changed || inBackoff {
+				e.tokenRWLock.Unlock()
+				return nil, nil // let the loop reschedule or exit
+			}
 		}
 		if owner != nil && owner != e.ctx {
 			e.tokenRWLock.Unlock()
@@ -366,14 +370,14 @@ func (e *entraidTokenManager) start(ctx context.Context, listener TokenListener,
 			case <-changed:
 				continue
 			case <-time.After(timeToRenewal):
-				renewalDelay = initialDelay
+				renewalDelay = 0 // this wait elapsed; a deferred round waits only until nextDemand
 
 				// Token is about to expire, refresh it
 				delay := initialDelay
 				for i := 0; i < e.retryOptions.MaxAttempts; i++ {
-					_, err := e.getToken(context.Background(), true, changed)
+					_, err := e.getToken(context.Background(), true, changed, i)
 					if err == nil || internal.IsClosed(closed) {
-						break // next iteration observes the published token or stop
+						break // reschedule against the current token and retry deadline
 					}
 
 					// check if err is retriable
@@ -447,7 +451,8 @@ func (e *entraidTokenManager) stopRun(closed <-chan struct{}, keepDemand bool) (
 	}
 	// Owner Stop cancels all work and clears retry pacing. The last unsubscribe
 	// cancels only a periodic request, replacing the context so later reads can
-	// start work; a request a reader is waiting on keeps running.
+	// start work. A refresh requested by a reader keeps running after the last
+	// unsubscribe, even if the reader already received the cached token.
 	if !keepDemand || (e.acquire != nil && !e.acquire.demand) {
 		if e.ctxCancel != nil {
 			e.ctxCancel()

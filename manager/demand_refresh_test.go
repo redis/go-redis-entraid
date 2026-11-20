@@ -115,6 +115,36 @@ func TestRestartDoesNotBypassDemandBackoff(t *testing.T) {
 	require.EqualValues(t, 2, idp.calls.Load())
 }
 
+func TestArmedTimerHonorsDemandBackoff(t *testing.T) {
+	idp := &failingIdentityProvider{fail: func(call int32) bool { return call > 1 }}
+	m, err := NewTokenManager(idp, TokenManagerOptions{
+		LowerRefreshBound: time.Hour, IdentityProviderResponseParser: lifetimeParser(time.Minute),
+		RetryOptions: RetryOptions{InitialDelay: time.Hour, MaxDelay: time.Hour},
+	})
+	require.NoError(t, err)
+	tm := m.(*entraidTokenManager)
+	stop, err := tm.Start(lifecycleTestListener{})
+	require.NoError(t, err)
+	defer stop()
+
+	// Capture the timer's cache version before a reader requests the due token.
+	tm.tokenRWLock.RLock()
+	scheduled := tm.changed
+	tm.tokenRWLock.RUnlock()
+	_, err = tm.GetToken(false)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		tm.tokenRWLock.RLock()
+		defer tm.tokenRWLock.RUnlock()
+		return time.Now().Before(tm.nextDemand)
+	}, time.Second, time.Millisecond, "reader refresh did not enter backoff")
+
+	// Dispatch that timer now, inside the backoff set by the failed request.
+	_, err = tm.getToken(context.Background(), true, scheduled, 0)
+	require.EqualValues(t, 2, idp.calls.Load(), "armed timer bypassed demand backoff")
+	require.NoError(t, err)
+}
+
 func TestRetiredTimerCannotRefresh(t *testing.T) {
 	for _, state := range []string{"stopped", "restarted"} {
 		t.Run(state, func(t *testing.T) {
@@ -138,7 +168,7 @@ func TestRetiredTimerCannotRefresh(t *testing.T) {
 				_, err = tm.StartSubscriptions(ctx, lifecycleTestListener{})
 				require.NoError(t, err)
 			}
-			_, err = tm.getToken(ctx, true, scheduled)
+			_, err = tm.getToken(ctx, true, scheduled, 0)
 			require.NoError(t, err)
 			tm.tokenRWLock.RLock()
 			defer tm.tokenRWLock.RUnlock()

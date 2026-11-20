@@ -97,9 +97,9 @@ type RetryOptions struct {
 type TokenManager interface {
 	// GetToken returns a token for authentication. With forceRefresh, it
 	// requests a new token instead of returning the cached one. The built-in
-	// manager returns a usable cached token without waiting; if that token is
-	// due for renewal, it starts or joins one background refresh. Only Start
-	// schedules periodic renewal.
+	// manager returns a usable cached token without waiting. If the token is due
+	// for renewal, the read shares any in-flight refresh or starts one if backoff
+	// permits. Reading the cache does not start periodic renewal.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a stopper function to stop the token manager
 	Start(listener TokenListener) (StopFunc, error)

@@ -415,9 +415,9 @@ func NewCredentialsProvider(tokenManager manager.TokenManager, options Credentia
 		listeners:    make([]auth.CredentialsListener, 0),
 	}
 	if _, ok := tokenManager.(subscriptionManager); ok {
-		// Fetch the initial token now so construction still fails on unusable
-		// credentials, but start periodic renewal only with the first
-		// subscription. The owner must Close to cancel outstanding work.
+		// Fetch the initial token at construction so acquisition errors reach the
+		// caller. Periodic renewal starts with the first subscription. The owner
+		// must Close to cancel outstanding work.
 		if _, err := tokenManager.GetToken(false); err != nil {
 			return nil, fmt.Errorf("couldn't acquire initial token: %w", err)
 		}
