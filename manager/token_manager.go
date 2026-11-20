@@ -49,6 +49,15 @@ type TokenManagerOptions struct {
 	//
 	// default: 30 seconds
 	RequestTimeout time.Duration
+
+	// AllowExpiredToken lets a non-forced read, such as setup for a new
+	// connection, return the cached token after its expiry time instead of
+	// waiting for a refresh. The read can still start a background refresh, and
+	// Redis can reject the token. When false, a cached token needs more than one
+	// second of remaining validity. Forced refreshes never return the cached token.
+	//
+	// default: false
+	AllowExpiredToken bool
 }
 
 // RetryOptions is a struct that contains the options for retrying the token request.
@@ -66,6 +75,7 @@ type RetryOptions struct {
 	// default: 3
 	MaxAttempts int
 	// InitialDelay is the initial delay before retrying the token request.
+	// Values <= 0 use the default.
 	//
 	// default: 1 second
 	InitialDelay time.Duration
@@ -85,8 +95,11 @@ type RetryOptions struct {
 // The TokenManager is responsible for obtaining and refreshing the token.
 // It is typically used in conjunction with an IdentityProvider to obtain the token.
 type TokenManager interface {
-	// GetToken returns the token for authentication.
-	// It takes a boolean value forceRefresh as an argument.
+	// GetToken returns a token for authentication. With forceRefresh, it
+	// requests a new token instead of returning the cached one. The built-in
+	// manager returns a usable cached token without waiting. If the token is due
+	// for renewal, the read shares any in-flight refresh or starts one if backoff
+	// permits. Reading the cache does not start periodic renewal.
 	GetToken(forceRefresh bool) (*token.Token, error)
 	// Start starts the token manager and returns a stopper function to stop the token manager
 	Start(listener TokenListener) (StopFunc, error)
@@ -139,6 +152,7 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
+		allowExpiredToken:              options.AllowExpiredToken,
 		tokenRWLock:                    &sync.RWMutex{},
 		startGate:                      make(chan struct{}, 1),
 	}, nil

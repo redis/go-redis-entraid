@@ -993,6 +993,13 @@ func TestEntraidTokenManager_durationToRenewal(t *testing.T) {
 	})
 }
 
+// cachedTokenForTest reads the cached token under its lock while renewal may replace it.
+func cachedTokenForTest(tm *entraidTokenManager) *token.Token {
+	tm.tokenRWLock.RLock()
+	defer tm.tokenRWLock.RUnlock()
+	return tm.token
+}
+
 func TestEntraidTokenManager_Streaming(t *testing.T) {
 	t.Parallel()
 	t.Run("Start and Close", func(t *testing.T) {
@@ -1036,10 +1043,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		time.Sleep(toRenewal / 10)
@@ -1105,7 +1112,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1160,7 +1167,7 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.Equal(t, time.Duration(0), toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1211,12 +1218,13 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
-		assert.NotNil(t, tm.token)
+		defer cancel()
+		assert.NotNil(t, cachedTokenForTest(tm))
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1268,10 +1276,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(true)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		time.Sleep(toRenewal + 100*time.Millisecond)
@@ -1323,10 +1331,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(false)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 		time.Sleep(toRenewal + 100*time.Millisecond)
@@ -1399,10 +1407,10 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		assert.NotNil(t, cancel)
 		assert.NoError(t, err)
 		assert.NotNil(t, tm.listener)
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1479,11 +1487,11 @@ func TestEntraidTokenManager_Streaming(t *testing.T) {
 		returnErr := newMockError(true)
 		idp.On("RequestToken", mock.Anything).Return(nil, returnErr)
 
-		toRenewal := tm.durationToRenewal(tm.token)
+		toRenewal := tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, time.Duration(0), toRenewal)
 
 		time.Sleep(time.Millisecond)
-		toRenewal = tm.durationToRenewal(tm.token)
+		toRenewal = tm.durationToRenewal(cachedTokenForTest(tm))
 		assert.NotEqual(t, expiresIn, toRenewal)
 		assert.True(t, expiresIn > toRenewal)
 
@@ -1644,7 +1652,8 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 							select {
 							case errorCh <- fmt.Errorf("failed to start token manager: %w", err):
 							default:
-								t.Fatalf("Goroutine %d, Operation %d: Failed to start token manager: %v", routineID, j, err)
+								t.Errorf("Goroutine %d, Operation %d: Failed to start token manager: %v", routineID, j, err)
+								return
 							}
 						}
 						continue
@@ -1664,7 +1673,8 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 						select {
 						case errorCh <- fmt.Errorf("failed to get token: %w", err):
 						default:
-							t.Fatalf("Goroutine %d, Operation %d: Failed to get token: %v", routineID, j, err)
+							t.Errorf("Goroutine %d, Operation %d: Failed to get token: %v", routineID, j, err)
+							return
 						}
 					} else if token != nil {
 						select {
@@ -1685,7 +1695,8 @@ func TestConcurrentTokenManagerOperations(t *testing.T) {
 									select {
 									case errorCh <- fmt.Errorf("failed to close token manager: %w", err):
 									default:
-										t.Fatalf("Goroutine %d, Operation %d: Failed to close token manager: %v", routineID, j, err)
+										t.Errorf("Goroutine %d, Operation %d: Failed to close token manager: %v", routineID, j, err)
+										return false
 									}
 								}
 							}

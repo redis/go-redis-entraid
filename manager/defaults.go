@@ -99,7 +99,7 @@ func defaultRetryOptionsOr(retryOptions RetryOptions) RetryOptions {
 	if retryOptions.MaxAttempts <= 0 {
 		retryOptions.MaxAttempts = DefaultRetryOptionsMaxAttempts
 	}
-	if retryOptions.InitialDelay == 0 {
+	if retryOptions.InitialDelay <= 0 {
 		retryOptions.InitialDelay = DefaultRetryOptionsInitialDelay
 	}
 	if retryOptions.BackoffMultiplier == 0 {
