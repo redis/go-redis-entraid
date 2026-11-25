@@ -53,17 +53,17 @@ import (
 
 func main() {
     // Get required environment variables
-    clientID := os.Getenv("AZURE_CLIENT_ID")
+    managedIdentityObjectID := os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID")
     redisEndpoint := os.Getenv("REDIS_ENDPOINT")
-    if clientID == "" || redisEndpoint == "" {
-        log.Fatal("AZURE_CLIENT_ID and REDIS_ENDPOINT environment variables are required")
+    if managedIdentityObjectID == "" || redisEndpoint == "" {
+        log.Fatal("AZURE_USER_ASSIGNED_MANAGED_ID and REDIS_ENDPOINT environment variables are required")
     }
 
     // Create credentials provider
     provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
         CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
         ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-            UserAssignedObjectID: clientID,
+            UserAssignedObjectID: managedIdentityObjectID,
             ManagedIdentityType:  identity.UserAssignedObjectID,
             Scopes:               []string{identity.RedisScopeDefault},
         },
@@ -140,10 +140,11 @@ start.
 ### Environment Setup
 ```bash
 # Required environment variables
-export AZURE_CLIENT_ID="your-client-id"
+export AZURE_USER_ASSIGNED_MANAGED_ID="your-managed-identity-object-id"
 export REDIS_ENDPOINT="your-redis-endpoint:6380"
 
 # Optional environment variables
+export AZURE_CLIENT_ID="your-client-id"
 export AZURE_TENANT_ID="your-tenant-id"
 export AZURE_CLIENT_SECRET="your-client-secret"
 export AZURE_AUTHORITY_HOST="https://login.microsoftonline.com"  # For custom authority
@@ -255,10 +256,11 @@ graph TD
 ### Environment Variables
 ```bash
 # Required
-AZURE_CLIENT_ID=your-client-id
+AZURE_USER_ASSIGNED_MANAGED_ID=your-managed-identity-object-id
 REDIS_ENDPOINT=your-redis-endpoint:6380
 
 # Optional
+AZURE_CLIENT_ID=your-client-id
 AZURE_TENANT_ID=your-tenant-id
 AZURE_CLIENT_SECRET=your-client-secret
 ```
@@ -332,7 +334,7 @@ type ManagedIdentityProviderOptions struct {
     // Required: Type of managed identity
     ManagedIdentityType ManagedIdentityType // SystemAssignedIdentity or UserAssignedObjectID
 
-    // Optional: Client ID for user-assigned identity
+    // Optional: Object ID for user-assigned identity
     UserAssignedObjectID string
 
     // Optional: Scopes for token access
@@ -711,7 +713,7 @@ func TestRedisConnection(t *testing.T) {
     provider, err := entraid.NewManagedIdentityCredentialsProvider(entraid.ManagedIdentityCredentialsProviderOptions{
         CredentialsProviderOptions: entraid.CredentialsProviderOptions{},
         ManagedIdentityProviderOptions: identity.ManagedIdentityProviderOptions{
-            UserAssignedObjectID: os.Getenv("AZURE_CLIENT_ID"),
+            UserAssignedObjectID: os.Getenv("AZURE_USER_ASSIGNED_MANAGED_ID"),
             ManagedIdentityType:  identity.UserAssignedObjectID,
             Scopes:               []string{identity.RedisScopeDefault},
         },
