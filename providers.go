@@ -165,3 +165,38 @@ func NewDefaultAzureCredentialsProvider(options DefaultAzureCredentialsProviderO
 	}
 	return credentialsProvider, nil
 }
+
+// TokenCredentialCredentialsProviderOptions is a struct that holds the options for the token credential credentials provider.
+type TokenCredentialCredentialsProviderOptions struct {
+	// CredentialsProviderOptions is the options for the credentials provider.
+	// This is used to configure the credentials provider when requesting a token.
+	CredentialsProviderOptions
+	// TokenCredentialIdentityProviderOptions is the options for the token credential identity provider.
+	// It sets the function that returns the azcore.TokenCredential and the scopes for the token.
+	identity.TokenCredentialIdentityProviderOptions
+}
+
+// NewTokenCredentialCredentialsProvider creates a new credentials provider that gets tokens
+// from any azcore.TokenCredential, for example an azidentity.WorkloadIdentityCredential or
+// azidentity.ManagedIdentityCredential for a specific client ID.
+// The credentials provider refreshes the token and re-authenticates connections as usual.
+func NewTokenCredentialCredentialsProvider(options TokenCredentialCredentialsProviderOptions) (auth.StreamingCredentialsProvider, error) {
+	// Create a new identity provider using the token credential.
+	idp, err := identity.NewTokenCredentialIdentityProvider(options.TokenCredentialIdentityProviderOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create token credential identity provider: %w", err)
+	}
+
+	// Create a new token manager using the identity provider.
+	tokenManager, err := options.getTokenManagerFactory()(idp, options.TokenManagerOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create token manager: %w", err)
+	}
+
+	// Create a new credentials provider using the token manager.
+	credentialsProvider, err := NewCredentialsProvider(tokenManager, options.CredentialsProviderOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create credentials provider: %w", err)
+	}
+	return credentialsProvider, nil
+}

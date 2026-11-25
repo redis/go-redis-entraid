@@ -249,6 +249,7 @@ graph TD
 | Client Secret | Service auth | High | Moderate | Good |
 | Client Cert | High security | Highest | Complex | Good |
 | Default Azure | Development | Moderate | Minimal | Good |
+| Token Credential | Any `azcore.TokenCredential`, such as Workload Identity with a client ID | Depends on the credential | Moderate | Good |
 
 ## Configuration Guide
 
@@ -401,6 +402,21 @@ type DefaultAzureIdentityProviderOptions struct {
 }
 ```
 
+#### 8. TokenCredentialIdentityProviderOptions
+Options for the token credential identity provider, which gets tokens from any `azcore.TokenCredential`:
+```go
+type TokenCredentialIdentityProviderOptions struct {
+    // Required: Returns the credential used to request a token.
+    // Called on every token request, so each refresh gets a new token
+    // instead of one from the credential's own cache.
+    NewCredential func() (azcore.TokenCredential, error)
+
+    // Optional: Scopes for token access
+    // Default: ["https://redis.azure.com/.default"]
+    Scopes []string
+}
+```
+
 ### Configuration Examples
 
 #### Basic Configuration
@@ -529,6 +545,21 @@ provider, err := entraid.NewConfidentialCredentialsProvider(entraid.Confidential
 provider, err := entraid.NewDefaultAzureCredentialsProvider(entraid.DefaultAzureCredentialsProviderOptions{
     DefaultAzureIdentityProviderOptions: identity.DefaultAzureIdentityProviderOptions{
         Scopes: []string{"https://redis.azure.com/.default"},
+    },
+})
+```
+
+### Any azcore.TokenCredential
+Use `NewTokenCredentialCredentialsProvider` when none of the built-in providers creates the credential you need. For example, `DefaultAzureCredential` always uses the identity in `AZURE_CLIENT_ID`. To use Workload Identity with a different identity federated to the same service account, pass its client ID:
+```go
+provider, err := entraid.NewTokenCredentialCredentialsProvider(entraid.TokenCredentialCredentialsProviderOptions{
+    TokenCredentialIdentityProviderOptions: identity.TokenCredentialIdentityProviderOptions{
+        NewCredential: func() (azcore.TokenCredential, error) {
+            return azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+                ClientID: os.Getenv("REDIS_CLIENT_ID"),
+            })
+        },
+        Scopes: []string{identity.RedisScopeDefault},
     },
 })
 ```
