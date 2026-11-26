@@ -143,6 +143,30 @@ func TestArmedTimerHonorsDemandBackoff(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestRenewalAfterNonForcedRecovery(t *testing.T) {
+	idp := &failingIdentityProvider{fail: func(call int32) bool { return call == 1 }}
+	tm, err := NewTokenManager(idp, TokenManagerOptions{
+		IdentityProviderResponseParser: lifetimeParser(2 * time.Second),
+		ExpirationRefreshRatio:         0.05, // renew after 100 ms
+		RetryOptions:                   RetryOptions{MaxDelay: time.Hour},
+	})
+	require.NoError(t, err)
+	_, err = tm.GetToken(true) // enter backoff with no usable cached token
+	require.ErrorContains(t, err, "identity provider unavailable")
+
+	// Start acquires a token without forcing a refresh. Without another read,
+	// the scheduler must renew that token before the old backoff expires.
+	listener := &renewalListener{next: make(chan struct{}, 1)}
+	stop, err := tm.Start(listener)
+	require.NoError(t, err)
+	defer stop()
+	select {
+	case <-listener.next:
+	case <-time.After(time.Second):
+		t.Fatal("replacement token was not renewed after recovery")
+	}
+}
+
 func TestRetiredTimerCannotRefresh(t *testing.T) {
 	for _, state := range []string{"stopped", "restarted"} {
 		t.Run(state, func(t *testing.T) {

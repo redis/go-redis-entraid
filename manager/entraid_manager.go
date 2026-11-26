@@ -190,27 +190,21 @@ func (e *entraidTokenManager) startAcquisition(force bool) *tokenAcquisition {
 		defer e.tokenRWLock.Unlock()
 		if flight.owner != e.ctx {
 			t, err = nil, errLifecycleRetired
-		} else {
-			if err == nil {
-				e.token = t
-				if e.changed != nil {
-					close(e.changed)
-					e.changed = make(chan struct{})
-				}
+		} else if err == nil {
+			e.token = t
+			if e.changed != nil {
+				close(e.changed)
+				e.changed = make(chan struct{})
 			}
-			// Forced results, including reader-requested refreshes, pace the next
-			// attempt for a still-due token: a failure waits like a failed renewal
-			// round; a new token that is already due waits InitialDelay.
-			if force {
-				switch {
-				case err != nil:
-					e.nextDemand = time.Now().Add(max(e.retryOptions.InitialDelay, e.retryOptions.MaxDelay))
-				case e.durationToRenewal(t) == 0:
-					e.nextDemand = time.Now().Add(e.retryOptions.InitialDelay)
-				default:
-					e.nextDemand = time.Time{}
-				}
+			// Drop the previous token's backoff. If a refresh or recovery returns
+			// an already-due token, pace the next attempt; leave first reads unpaced.
+			if (force || !e.nextDemand.IsZero()) && e.durationToRenewal(t) == 0 {
+				e.nextDemand = time.Now().Add(e.retryOptions.InitialDelay)
+			} else {
+				e.nextDemand = time.Time{}
 			}
+		} else if force {
+			e.nextDemand = time.Now().Add(max(e.retryOptions.InitialDelay, e.retryOptions.MaxDelay))
 		}
 		flight.token, flight.err = t, err
 		e.acquire = nil
