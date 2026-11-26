@@ -26,22 +26,20 @@ func TestCachedReadDuringBlockedParse(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		lifetime time.Duration
-		allow    bool
 		usable   bool
 	}{
-		{"valid", time.Minute, false, true},
-		{"strict", -time.Minute, false, false},
-		{"allow expired", -time.Minute, true, true},
+		{"valid", time.Minute, true},
+		{"expired", -time.Minute, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			parser := blockedParser{make(chan struct{}), make(chan struct{})}
-			unblock := sync.OnceFunc(func() { close(parser.release) })
-			defer unblock()
 			idp := &failingIdentityProvider{fail: func(int32) bool { return false }}
-			value, err := NewTokenManager(idp, TokenManagerOptions{AllowExpiredToken: tc.allow, LowerRefreshBound: time.Hour, IdentityProviderResponseParser: parser})
+			value, err := NewTokenManager(idp, TokenManagerOptions{LowerRefreshBound: time.Hour, IdentityProviderResponseParser: parser})
 			require.NoError(t, err)
 			tm := value.(*entraidTokenManager)
 			defer tm.Stop()
+			unblock := sync.OnceFunc(func() { close(parser.release) })
+			defer unblock() // release the parser before Stop even if a check fails
 			current, err := lifetimeParser(tc.lifetime).ParseResponse(nil)
 			require.NoError(t, err)
 			tm.token = current

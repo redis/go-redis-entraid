@@ -92,13 +92,14 @@ func main() {
 
 The application owns the credentials provider. One provider can be shared by
 several Redis clients, and closing a client does not close the provider.
-Providers from this package's constructors fetch an initial token when created
-and renew it while Redis connections use the provider. After the last
+With the built-in token manager, the provider fetches an initial token at
+construction and starts periodic renewal on the first subscription. After the last
 connection unsubscribes, periodic renewal stops; a refresh requested by a
 reconnecting connection can still finish so the next connection gets the new
 token. No new token requests start while the provider is idle. Close the
 provider when you are done with it, including after a failed dial, to cancel
-outstanding work.
+outstanding work. If you supply a custom token manager, `NewCredentialsProvider`
+calls its `Start` method at construction.
 
 The providers returned by the constructors implement
 `entraid.CredentialsProviderCloser`. Register its cleanup before the clients'
@@ -761,7 +762,7 @@ RetryOptions: manager.RetryOptions{
 ```
 
 ### Q: What happens if token refresh fails?
-A: While Redis connections use the provider, the library retries according to `RetryOptions`. If all attempts fail, or the error is not retryable, the error is reported to the client and a new round starts after `MaxDelay`, or after `InitialDelay` if that is longer. New connections meanwhile authenticate with the cached token without waiting for the refresh, as long as it has more than one second of validity left. Set `manager.TokenManagerOptions.AllowExpiredToken` to let them try the cached token after it expires; Redis can reject it. Without a usable cached token, a new connection waits for a successful token request. You can customize the retry behavior by:
+A: While Redis connections use the provider, the library retries according to `RetryOptions`. If all attempts fail, or the error is not retryable, the error is reported to the client and a new round starts after `MaxDelay`, or after `InitialDelay` if that is longer. If the cached token has more than one second of validity left, the provider returns it to new connections without waiting for the refresh. This helps during a token issuance outage only if Redis can still validate the token. Without a usable cached token, a new connection waits for the token request and can fail or time out. You can customize the retry behavior by:
 1. Setting the maximum number of attempts
 2. Configuring the initial and maximum delay between retries using `time.Duration` values
 3. Setting the backoff multiplier for exponential backoff

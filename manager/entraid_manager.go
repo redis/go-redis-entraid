@@ -34,8 +34,7 @@ type entraidTokenManager struct {
 	nextDemand time.Time
 	// changed is closed and replaced when a token is published, and closed
 	// and cleared when the scheduler stops.
-	changed           chan struct{}
-	allowExpiredToken bool
+	changed chan struct{}
 
 	// identityProviderResponseParser is the parser used to parse the response from the identity provider.
 	// It`s ParseResponse method will be called to parse the response and return the token.
@@ -125,8 +124,7 @@ func (e *entraidTokenManager) getToken(ctx context.Context, forceRefresh bool, s
 		}
 		owner = e.ctx
 		flight := e.acquire
-		current := e.token
-		if !forceRefresh && current != nil && (e.allowExpiredToken || validToken(current) != nil) {
+		if current := e.token; !forceRefresh && canUseCachedToken(current) {
 			// The cached token is due: start or join one background refresh
 			// unless retry pacing is active. Mark it as demand so the last
 			// unsubscribe does not cancel it. The reader does not wait.
@@ -246,16 +244,11 @@ func (e *entraidTokenManager) requestToken(ctx context.Context) (t *token.Token,
 
 // currentTokenMinValidity is how long a cached token must remain valid for a
 // non-forced read to return it, so a new connection does not authenticate
-// with a token that expires immediately. AllowExpiredToken disables this check.
+// with a token that expires immediately.
 const currentTokenMinValidity = time.Second
 
-// validToken returns t if it stays valid for currentTokenMinValidity,
-// otherwise nil.
-func validToken(t *token.Token) *token.Token {
-	if t != nil && time.Until(t.ExpirationOn()) > currentTokenMinValidity {
-		return t
-	}
-	return nil
+func canUseCachedToken(t *token.Token) bool {
+	return t != nil && time.Until(t.ExpirationOn()) > currentTokenMinValidity
 }
 
 // Start starts the token manager and returns cancelFunc to stop the token manager.

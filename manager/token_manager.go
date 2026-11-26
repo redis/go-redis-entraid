@@ -49,15 +49,6 @@ type TokenManagerOptions struct {
 	//
 	// default: 30 seconds
 	RequestTimeout time.Duration
-
-	// AllowExpiredToken lets a non-forced read, such as setup for a new
-	// connection, return the cached token after its expiry time instead of
-	// waiting for a refresh. The read can still start a background refresh, and
-	// Redis can reject the token. When false, a cached token needs more than one
-	// second of remaining validity. Forced refreshes never return the cached token.
-	//
-	// default: false
-	AllowExpiredToken bool
 }
 
 // RetryOptions is a struct that contains the options for retrying the token request.
@@ -152,7 +143,6 @@ func NewTokenManager(idp shared.IdentityProvider, options TokenManagerOptions) (
 		identityProviderResponseParser: options.IdentityProviderResponseParser,
 		retryOptions:                   options.RetryOptions,
 		requestTimeout:                 options.RequestTimeout,
-		allowExpiredToken:              options.AllowExpiredToken,
 		tokenRWLock:                    &sync.RWMutex{},
 		startGate:                      make(chan struct{}, 1),
 	}, nil

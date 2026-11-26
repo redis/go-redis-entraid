@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"errors"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -176,7 +175,7 @@ type gatedIdentityProvider struct {
 	release chan struct{}
 }
 
-func (p *gatedIdentityProvider) RequestToken(context.Context) (shared.IdentityProviderResponse, error) {
+func (p *gatedIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
 	if p.calls.Add(1) == 1 {
 		return shared.NewIDPResponse(shared.ResponseTypeRawToken, "token")
 	}
@@ -184,65 +183,38 @@ func (p *gatedIdentityProvider) RequestToken(context.Context) (shared.IdentityPr
 	case p.entered <- struct{}{}:
 	default:
 	}
-	<-p.release
-	return nil, errors.New("identity provider unavailable")
+	select {
+	case <-p.release:
+		return nil, errors.New("identity provider unavailable")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
-// Delay the reader's first context check until the later identity request starts.
-type delayedReaderContext struct {
-	context.Context
-	entered, refreshStarted chan struct{}
-	once                    sync.Once
-}
-
-func (c *delayedReaderContext) Err() error {
-	c.once.Do(func() {
-		close(c.entered)
-		select {
-		case <-c.refreshStarted:
-		case <-c.Done():
-		}
-	})
-	return c.Context.Err()
-}
-
-func TestDelayedReaderUsesTokenPublishedBeforeLaterRefresh(t *testing.T) {
+func TestCachedReadDuringBlockedRefresh(t *testing.T) {
 	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{}, 1)}
-	defer close(idp.release)
 	tokenManager, err := NewTokenManager(idp, TokenManagerOptions{
-		LowerRefreshBound:              time.Hour, // every request is a renewal
+		RequestTimeout:                 time.Second,
+		LowerRefreshBound:              time.Hour, // cached token is due for renewal
 		IdentityProviderResponseParser: lifetimeParser(time.Hour),
 	})
 	require.NoError(t, err)
 	tm := tokenManager.(*entraidTokenManager)
 	defer tm.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	reader := &delayedReaderContext{Context: ctx, entered: make(chan struct{}), refreshStarted: idp.entered}
-	var got *token.Token
-	var readErr error
-	done := make(chan struct{})
-	go func() {
-		got, readErr = tm.GetTokenWithContext(reader, false)
-		close(done)
-	}()
-	select {
-	case <-reader.entered:
-	case <-ctx.Done():
-		t.Fatal("reader did not reach token lookup")
-	}
-
-	current, err := tm.GetTokenWithContext(ctx, false)
+	defer close(idp.release)
+	current, err := tm.GetToken(false)
 	require.NoError(t, err)
 	forced := make(chan error, 1)
-	go func() { _, err := tm.GetTokenWithContext(ctx, true); forced <- err }()
+	go func() { _, err := tm.GetToken(true); forced <- err }()
 	select {
-	case <-done:
-		require.NoError(t, readErr, "cached read waited for the later refresh")
-		require.Same(t, current, got)
-	case <-ctx.Done():
-		t.Fatal("cached read waited for the later refresh")
+	case <-idp.entered:
+	case <-time.After(time.Second):
+		t.Fatal("forced refresh did not reach the identity provider")
 	}
+
+	got, err := tm.GetToken(false)
+	require.NoError(t, err)
+	require.Same(t, current, got)
 	idp.release <- struct{}{}
 	require.ErrorContains(t, <-forced, "identity provider unavailable")
 	require.EqualValues(t, 2, idp.calls.Load(), "the cached read must not start another request")
