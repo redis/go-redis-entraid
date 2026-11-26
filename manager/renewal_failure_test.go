@@ -150,7 +150,7 @@ func TestGetTokenReturnsCurrentTokenWhileRenewalFails(t *testing.T) {
 		got, err := tm.GetToken(false)
 		require.NoError(t, err)
 		require.Same(t, current, got)
-		require.EqualValues(t, 2, idp.calls.Load(), "a renewal must still be attempted")
+		require.Eventually(t, func() bool { return idp.calls.Load() == 2 }, time.Second, time.Millisecond, "due read must request renewal")
 
 		_, err = tm.GetToken(true)
 		require.ErrorContains(t, err, "identity provider unavailable")
@@ -175,7 +175,7 @@ type gatedIdentityProvider struct {
 	release chan struct{}
 }
 
-func (p *gatedIdentityProvider) RequestToken(context.Context) (shared.IdentityProviderResponse, error) {
+func (p *gatedIdentityProvider) RequestToken(ctx context.Context) (shared.IdentityProviderResponse, error) {
 	if p.calls.Add(1) == 1 {
 		return shared.NewIDPResponse(shared.ResponseTypeRawToken, "token")
 	}
@@ -183,44 +183,41 @@ func (p *gatedIdentityProvider) RequestToken(context.Context) (shared.IdentityPr
 	case p.entered <- struct{}{}:
 	default:
 	}
-	<-p.release
-	return nil, errors.New("identity provider unavailable")
+	select {
+	case <-p.release:
+		return nil, errors.New("identity provider unavailable")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
-func TestNonForcedCallerSharingFailedForcedRequestGetsCurrentToken(t *testing.T) {
-	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{})}
+func TestCachedReadDuringBlockedRefresh(t *testing.T) {
+	idp := &gatedIdentityProvider{entered: make(chan struct{}, 1), release: make(chan struct{}, 1)}
 	tokenManager, err := NewTokenManager(idp, TokenManagerOptions{
-		LowerRefreshBound:              time.Hour, // every request is a renewal
+		RequestTimeout:                 time.Second,
+		LowerRefreshBound:              time.Hour, // cached token is due for renewal
 		IdentityProviderResponseParser: lifetimeParser(time.Hour),
 	})
 	require.NoError(t, err)
 	tm := tokenManager.(*entraidTokenManager)
+	defer tm.Stop()
+	defer close(idp.release)
 	current, err := tm.GetToken(false)
 	require.NoError(t, err)
-
 	forced := make(chan error, 1)
-	go func() {
-		_, err := tm.GetTokenWithContext(context.Background(), true)
-		forced <- err
-	}()
-	<-idp.entered
-	type result struct {
-		token *token.Token
-		err   error
+	go func() { _, err := tm.GetToken(true); forced <- err }()
+	select {
+	case <-idp.entered:
+	case <-time.After(time.Second):
+		t.Fatal("forced refresh did not reach the identity provider")
 	}
-	joined := make(chan result, 1)
-	go func() {
-		tk, err := tm.GetTokenWithContext(context.Background(), false)
-		joined <- result{tk, err}
-	}()
-	time.Sleep(50 * time.Millisecond) // let the non-forced caller join the forced request
-	close(idp.release)
 
+	got, err := tm.GetToken(false)
+	require.NoError(t, err)
+	require.Same(t, current, got)
+	idp.release <- struct{}{}
 	require.ErrorContains(t, <-forced, "identity provider unavailable")
-	r := <-joined
-	require.NoError(t, r.err)
-	require.Same(t, current, r.token)
-	require.EqualValues(t, 2, idp.calls.Load(), "the non-forced caller must share the forced request")
+	require.EqualValues(t, 2, idp.calls.Load(), "the cached read must not start another request")
 }
 
 // lifetimeParser returns tokens that expire after lifetime.

@@ -24,6 +24,8 @@ type providerCloseAttempt struct {
 
 // Close rejects subscriptions and releases provider-owned resources. Pending
 // subscriptions finish before cleanup; they cannot register after Close begins.
+// Close cancels subscriptions still waiting for a built-in token and
+// outstanding token requests.
 // Concurrent calls join one cleanup attempt; a failed attempt may be retried.
 // Snapshotted callbacks may finish afterward. Custom manager methods must not
 // synchronously reenter Close on the same provider: startup/stop would wait on
@@ -41,6 +43,9 @@ func (e *entraidCredentialsProvider) Close() (err error) {
 		return nil
 	}
 	e.closed = true
+	if e.cancelSetup != nil {
+		e.cancelSetup()
+	}
 	e.rwLock.Lock()
 	for _, r := range e.registrations {
 		r.active = false
