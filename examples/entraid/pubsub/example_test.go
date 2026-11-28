@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -81,6 +83,13 @@ func loadConfig(t *testing.T) *config.EntraidConfig {
 	return cfg
 }
 
+// clientName gives each test's connections a unique name, so CLIENT LIST
+// can tell them apart from every other connection on the server.
+func clientName(t *testing.T) string {
+	r := strings.NewReplacer("/", "-", " ", "-")
+	return fmt.Sprintf("entraid-ps-%s-%d", r.Replace(t.Name()), time.Now().UnixNano())
+}
+
 func standaloneOptions(t *testing.T, cfg *config.EntraidConfig, cp auth.StreamingCredentialsProvider, protocol int) *redis.Options {
 	t.Helper()
 	opts, err := redis.ParseURL(cfg.Endpoints["standalone-entraid-acl"].Endpoints[0])
@@ -89,6 +98,7 @@ func standaloneOptions(t *testing.T, cfg *config.EntraidConfig, cp auth.Streamin
 	}
 	opts.StreamingCredentialsProvider = cp
 	opts.Protocol = protocol
+	opts.ClientName = clientName(t)
 	return opts
 }
 
@@ -103,40 +113,184 @@ func clusterOptions(t *testing.T, cfg *config.EntraidConfig, cp auth.StreamingCr
 		TLSConfig:                    opts.TLSConfig,
 		StreamingCredentialsProvider: cp,
 		Protocol:                     protocol,
+		ClientName:                   clientName(t),
 	}
+}
+
+// connTracker polls CLIENT LIST for the subscribed connections named
+// name and records every connection ID it sees. On RESP3 a refresh is
+// applied in place, so the IDs never change. On RESP2 every refresh
+// replaces the subscribed connection, so new IDs appear: the number of
+// IDs beyond the first poll counts the rotations. A rotation does not
+// show up as subscribe events, so the events cannot be used for this.
+type connTracker struct {
+	name string
+	list func(ctx context.Context) ([]string, error)
+
+	mu      sync.Mutex
+	initial int
+	ids     map[string]struct{}
+	err     error
+	stop    chan struct{}
+	done    chan struct{}
+}
+
+func trackStandalone(client *redis.Client, name string) *connTracker {
+	return newConnTracker(name, func(ctx context.Context) ([]string, error) {
+		s, err := client.ClientList(ctx).Result()
+		return []string{s}, err
+	})
+}
+
+func trackCluster(client *redis.ClusterClient, name string) *connTracker {
+	return newConnTracker(name, func(ctx context.Context) ([]string, error) {
+		var mu sync.Mutex
+		var out []string
+		err := client.ForEachShard(ctx, func(ctx context.Context, node *redis.Client) error {
+			s, err := node.ClientList(ctx).Result()
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			out = append(out, s)
+			mu.Unlock()
+			return nil
+		})
+		return out, err
+	})
+}
+
+func newConnTracker(name string, list func(ctx context.Context) ([]string, error)) *connTracker {
+	return &connTracker{
+		name: name,
+		list: list,
+		ids:  make(map[string]struct{}),
+		stop: make(chan struct{}),
+		done: make(chan struct{}),
+	}
+}
+
+// subscribedIDs returns the IDs of the subscribed connections named
+// c.name in the given CLIENT LIST outputs.
+func (c *connTracker) subscribedIDs(lists []string) []string {
+	var ids []string
+	for _, list := range lists {
+		for _, line := range strings.Split(list, "\n") {
+			var id, name string
+			subs := 0
+			for _, f := range strings.Fields(line) {
+				k, v, ok := strings.Cut(f, "=")
+				if !ok {
+					continue
+				}
+				switch k {
+				case "id":
+					id = v
+				case "name":
+					name = v
+				case "sub", "psub", "ssub":
+					n, _ := strconv.Atoi(v)
+					subs += n
+				}
+			}
+			if name == c.name && subs > 0 {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+
+// start records the subscribed connections present now, then keeps
+// polling until finish.
+func (c *connTracker) start(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	lists, err := c.list(ctx)
+	if err != nil {
+		c.err = err
+		close(c.done)
+		t.Logf("CLIENT LIST is not available (%v); rotations are not counted", err)
+		return
+	}
+	for _, id := range c.subscribedIDs(lists) {
+		c.ids[id] = struct{}{}
+	}
+	c.initial = len(c.ids)
+	go func() {
+		defer close(c.done)
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-c.stop:
+				return
+			case <-tick.C:
+			}
+			lists, err := c.list(ctx)
+			c.mu.Lock()
+			if err != nil {
+				c.err = err
+				c.mu.Unlock()
+				return
+			}
+			for _, id := range c.subscribedIDs(lists) {
+				c.ids[id] = struct{}{}
+			}
+			c.mu.Unlock()
+		}
+	}()
+}
+
+// finish stops polling and returns the connections seen at the start and
+// the rotations seen since; ok is false when CLIENT LIST failed.
+func (c *connTracker) finish() (initial, rotations int, ok bool) {
+	select {
+	case <-c.done:
+	default:
+		close(c.stop)
+		<-c.done
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil || c.initial == 0 {
+		return 0, 0, false
+	}
+	return c.initial, len(c.ids) - c.initial, true
 }
 
 // streamResult is what a subscriber saw while messages were published.
 type streamResult struct {
-	received      []string
-	resubscribes  int // confirmations after the initial ones (reconnects)
-	firstConfirms int
+	published  int
+	unique     int
+	duplicates int
 }
 
-// runStream subscribes through sub, publishes count messages per
-// channel through publish (one every period), and collects what arrives
-// until every message is in or runFor plus a grace period passes.
-func runStream(t *testing.T, ps *redis.PubSub, channels []string, publish func(ctx context.Context, channel, msg string) error) streamResult {
+// runStream waits for the initial confirmations, starts tr, publishes
+// messages on every channel through publish (one round every 200ms for
+// runFor), and collects what arrives until every published message is in
+// or a grace period passes. A message that never arrives fails the test.
+func runStream(t *testing.T, ps *redis.PubSub, channels []string, tr *connTracker, publish func(ctx context.Context, channel, msg string) error) streamResult {
 	t.Helper()
 	ctx := context.Background()
 
 	events := ps.ChannelWithSubscriptions()
-	var res streamResult
-	// Wait for the initial confirmations.
+	confirms := 0
 	deadline := time.After(10 * time.Second)
-	for res.firstConfirms < len(channels) {
+	for confirms < len(channels) {
 		select {
 		case ev := <-events:
 			if _, ok := ev.(*redis.Subscription); ok {
-				res.firstConfirms++
+				confirms++
 			}
 		case <-deadline:
-			t.Fatalf("got %d of %d subscribe confirmations", res.firstConfirms, len(channels))
+			t.Fatalf("got %d of %d subscribe confirmations", confirms, len(channels))
 		}
 	}
+	tr.start(t)
 
-	total := 0
 	var mu sync.Mutex
+	sent := map[string]bool{}
 	stop := time.Now().Add(runFor)
 	done := make(chan struct{})
 	go func() {
@@ -149,24 +303,24 @@ func runStream(t *testing.T, ps *redis.PubSub, channels []string, publish func(c
 					return
 				}
 				mu.Lock()
-				total++
+				sent[msg] = true
 				mu.Unlock()
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
 	}()
 
+	seen := map[string]int{}
+	var res streamResult
 	grace := time.After(runFor + 10*time.Second)
 	published := false
 	doneCh := done
 	for {
 		mu.Lock()
-		want := total
+		want := len(sent)
 		mu.Unlock()
-		if published && len(res.received) >= want {
-			if len(res.received) > want {
-				t.Fatalf("received %d messages, published %d (duplicates)", len(res.received), want)
-			}
+		if published && len(seen) >= want {
+			res.published, res.unique = want, len(seen)
 			return res
 		}
 		select {
@@ -174,16 +328,16 @@ func runStream(t *testing.T, ps *redis.PubSub, channels []string, publish func(c
 			if !ok {
 				t.Fatal("subscription channel closed")
 			}
-			switch v := ev.(type) {
-			case *redis.Message:
-				res.received = append(res.received, v.Payload)
-			case *redis.Subscription:
-				res.resubscribes++
+			if m, ok := ev.(*redis.Message); ok {
+				seen[m.Payload]++
+				if seen[m.Payload] > 1 {
+					res.duplicates++
+				}
 			}
 		case <-doneCh:
 			published, doneCh = true, nil
 		case <-grace:
-			t.Fatalf("received %d of %d messages", len(res.received), want)
+			t.Fatalf("received %d of %d messages", len(seen), want)
 		}
 	}
 }
@@ -195,45 +349,74 @@ func requireRefreshes(t *testing.T, cp *countingProvider, before int64) {
 	}
 }
 
+// checkRotations checks the connection IDs tr saw and the duplicates. On
+// RESP3 the subscribed connections must never change. On RESP2 they must
+// change, and each rotation may deliver at most one message twice: the
+// old connection's UNSUBSCRIBE and the new one's SUBSCRIBE go out on two
+// sockets, so the server can apply the SUBSCRIBE first.
+func checkRotations(t *testing.T, tr *connTracker, res streamResult, protocol int) {
+	t.Helper()
+	initial, rotations, ok := tr.finish()
+	t.Logf("subscribed connections=%d rotations=%d published=%d duplicates=%d",
+		initial, rotations, res.published, res.duplicates)
+	if protocol == 3 {
+		if ok && rotations != 0 {
+			t.Fatalf("RESP3 subscription changed connection %d times, want 0 (re-auth must be in place)", rotations)
+		}
+		if res.duplicates != 0 {
+			t.Fatalf("RESP3 delivered %d messages twice, want 0", res.duplicates)
+		}
+		return
+	}
+	if !ok {
+		return
+	}
+	if rotations == 0 {
+		t.Fatal("RESP2 subscription never changed connection; refreshes were not applied")
+	}
+	if res.duplicates > rotations {
+		t.Fatalf("RESP2 delivered %d messages twice, want at most %d (one per rotation)", res.duplicates, rotations)
+	}
+}
+
 // RESP3: every refresh is applied in place (AUTH on the subscribed
-// connection), so the subscription never reconnects and loses nothing.
+// connection), so the subscription keeps its connection and loses nothing.
 func TestPubSubStandaloneRESP3(t *testing.T) {
 	cfg := loadConfig(t)
 	cp := newProvider(t, cfg)
-	client := redis.NewClient(standaloneOptions(t, cfg, cp, 3))
+	opts := standaloneOptions(t, cfg, cp, 3)
+	client := redis.NewClient(opts)
 	defer client.Close()
 
 	ps := client.Subscribe(context.Background(), "entraid-ps-resp3")
 	defer ps.Close()
+	tr := trackStandalone(client, opts.ClientName)
 	before := cp.pushed.Load()
-	res := runStream(t, ps, []string{"entraid-ps-resp3"}, func(ctx context.Context, ch, msg string) error {
+	res := runStream(t, ps, []string{"entraid-ps-resp3"}, tr, func(ctx context.Context, ch, msg string) error {
 		return client.Publish(ctx, ch, msg).Err()
 	})
 	requireRefreshes(t, cp, before)
-	if res.resubscribes != 0 {
-		t.Fatalf("RESP3 subscription resubscribed %d times, want 0 (re-auth must be in place)", res.resubscribes)
-	}
+	checkRotations(t, tr, res, 3)
 }
 
 // RESP2: a subscribed connection cannot run AUTH, so each refresh
-// replaces it; the subscription must still receive every message
-// published after each replacement settled.
+// replaces it; the subscription must still receive every message.
 func TestPubSubStandaloneRESP2(t *testing.T) {
 	cfg := loadConfig(t)
 	cp := newProvider(t, cfg)
-	client := redis.NewClient(standaloneOptions(t, cfg, cp, 2))
+	opts := standaloneOptions(t, cfg, cp, 2)
+	client := redis.NewClient(opts)
 	defer client.Close()
 
 	ps := client.Subscribe(context.Background(), "entraid-ps-resp2")
 	defer ps.Close()
+	tr := trackStandalone(client, opts.ClientName)
 	before := cp.pushed.Load()
-	res := runStream(t, ps, []string{"entraid-ps-resp2"}, func(ctx context.Context, ch, msg string) error {
+	res := runStream(t, ps, []string{"entraid-ps-resp2"}, tr, func(ctx context.Context, ch, msg string) error {
 		return client.Publish(ctx, ch, msg).Err()
 	})
 	requireRefreshes(t, cp, before)
-	if res.resubscribes == 0 {
-		t.Fatal("RESP2 subscription never resubscribed; refreshes were not applied")
-	}
+	checkRotations(t, tr, res, 2)
 }
 
 // Idle: no messages across several refreshes; the subscription must
@@ -270,7 +453,8 @@ func TestPubSubCluster(t *testing.T) {
 	for _, protocol := range []int{3, 2} {
 		t.Run(fmt.Sprintf("RESP%d", protocol), func(t *testing.T) {
 			cp := newProvider(t, cfg)
-			client := redis.NewClusterClient(clusterOptions(t, cfg, cp, protocol))
+			opts := clusterOptions(t, cfg, cp, protocol)
+			client := redis.NewClusterClient(opts)
 			defer client.Close()
 			ctx := context.Background()
 			if err := client.Ping(ctx).Err(); err != nil {
@@ -281,11 +465,13 @@ func TestPubSubCluster(t *testing.T) {
 				ch := fmt.Sprintf("entraid-ps-cluster-%d", protocol)
 				ps := client.Subscribe(ctx, ch)
 				defer ps.Close()
+				tr := trackCluster(client, opts.ClientName)
 				before := cp.pushed.Load()
-				runStream(t, ps, []string{ch}, func(ctx context.Context, ch, msg string) error {
+				res := runStream(t, ps, []string{ch}, tr, func(ctx context.Context, ch, msg string) error {
 					return client.Publish(ctx, ch, msg).Err()
 				})
 				requireRefreshes(t, cp, before)
+				checkRotations(t, tr, res, protocol)
 			})
 
 			t.Run("SSubscribe", func(t *testing.T) {
@@ -297,11 +483,13 @@ func TestPubSubCluster(t *testing.T) {
 				}
 				ps := client.SSubscribe(ctx, channels...)
 				defer ps.Close()
+				tr := trackCluster(client, opts.ClientName)
 				before := cp.pushed.Load()
-				runStream(t, ps, channels, func(ctx context.Context, ch, msg string) error {
+				res := runStream(t, ps, channels, tr, func(ctx context.Context, ch, msg string) error {
 					return client.SPublish(ctx, ch, msg).Err()
 				})
 				requireRefreshes(t, cp, before)
+				checkRotations(t, tr, res, protocol)
 			})
 		})
 	}
