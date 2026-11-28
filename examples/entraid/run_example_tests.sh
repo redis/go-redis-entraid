@@ -5,6 +5,10 @@
 # Common environment variables
 #export AZURE_REDIS_SCOPES="https://redis.azure.com/.default"
 #export REDIS_ENDPOINTS_CONFIG_PATH="endpoints.json"
+# GO_REDIS_REF selects the go-redis version the examples run against
+# (default: master). Use a commit SHA for branches: Go rejects branch
+# names with a slash (e.g. feature/pubsub) as versions.
+GO_REDIS_REF="${GO_REDIS_REF:-master}"
 
 # Exit on any error
 set -e
@@ -25,7 +29,7 @@ run_example_test() {
     fi
     
     pushd "$example_dir" > /dev/null
-    go get github.com/redis/go-redis/v9@master
+    go get "github.com/redis/go-redis/v9@${GO_REDIS_REF}"
     go mod tidy
     
     # Run tests with verbose output and JSON format for potential CTRF conversion
